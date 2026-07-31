@@ -19,6 +19,13 @@ public class SettingsMenuController : MonoBehaviour
 
     [SerializeField] private UIAnimationController animatorsController;
 
+    [SerializeField] private Canvas canvas;
+    private void OnEnable()
+    {
+        canvas.worldCamera = Camera.main;
+        canvas.planeDistance = 90;
+    }
+
     private void Start()
     {
         InitializeUI();

@@ -232,6 +232,7 @@ MonoBehaviour:
   crtStateText: {fileID: 1782573065}
   shakeStateText: {fileID: 806282967}
   animatorsController: {fileID: 1038867230}
+  canvas: {fileID: 668328609246706684}
 --- !u!114 &1038867230
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -405,6 +406,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 6864d5fd3a7f35842ae77d740702a7eb, type: 3}
+--- !u!223 &668328609246706684 stripped
+Canvas:
+  m_CorrespondingSourceObject: {fileID: 2195658414668409492, guid: 6864d5fd3a7f35842ae77d740702a7eb, type: 3}
+  m_PrefabInstance: {fileID: 668328609246706683}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
