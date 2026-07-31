@@ -39,7 +39,7 @@ Material:
     m_Floats:
     - _Blur_Offset: 0.00155
     - _Curvature: 0.08
-    - _Intensity: 1
+    - _Intensity: 0
     - _Scan_Lines_Speed: 0.02
     m_Colors:
     - _Color: {r: 4, g: 4, b: 4, a: 1}
