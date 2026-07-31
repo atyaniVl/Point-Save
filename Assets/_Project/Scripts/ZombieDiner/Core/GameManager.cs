@@ -1,5 +1,7 @@
-using System;
+﻿using System;
 using UnityEngine;
+using UnityEngine.UI;
+using DG.Tweening;
 
 namespace ZombieDiner.Core
 {
@@ -7,91 +9,116 @@ namespace ZombieDiner.Core
     {
         public static GameManager Instance { get; private set; }
 
-        // ========================================================================
-        // OBSERVER PATTERN EVENTS
-        // ========================================================================
+        [Header("Current State")]
+        [SerializeField] private GameStage currentStage = GameStage.Stage1_Normal;
+        [SerializeField] private int playerHealth = 100;
 
-        /// <summary>
-        /// Fired whenever the game stage changes
-        /// (Stage1, Cutscene, Stage2, GameOver).
-        /// </summary>
+        [Header("Juice & Visual Transition Settings")]
+        [SerializeField] private SpriteRenderer backgroundSpriteRenderer;
+        [SerializeField] private Image backgroundImageUI;
+
+        [Header("Stage Colors")]
+        [SerializeField] private Color normalStageColor = new Color(0.8f, 0.9f, 1f, 1f);
+        [SerializeField] private Color cutsceneColor = new Color(0.1f, 0.1f, 0.15f, 1f);
+        [SerializeField] private Color zombieStageColor = new Color(0.2f, 0.35f, 0.2f, 1f);
+
+        public GameStage CurrentStage => currentStage;
+
         public static event Action<GameStage> OnStageChanged;
-
-        /// <summary>
-        /// Fired when the game enters the Game Over state.
-        /// </summary>
         public static event Action OnGameOverTriggered;
-
-        // ========================================================================
-        // PROPERTIES
-        // ========================================================================
-
-        public GameStage CurrentStage { get; private set; } = GameStage.Stage1_Normal;
-
-        /// <summary>
-        /// Returns true while the player is actively playing
-        /// (either the Human stage or the Zombie stage).
-        /// </summary>
-        public bool IsPlaying =>
-            CurrentStage == GameStage.Stage1_Normal ||
-            CurrentStage == GameStage.Stage2_Zombie;
 
         private void Awake()
         {
-            // Safe Singleton initialization
-            if (Instance == null)
-            {
-                Instance = this;
-            }
-            else
-            {
-                Destroy(gameObject);
-                return;
-            }
+            if (Instance == null) Instance = this;
+            else Destroy(gameObject);
         }
 
         private void Start()
         {
-            // Start the game in Stage 1 when the scene loads
-            ChangeStage(GameStage.Stage1_Normal);
+            ApplyStageVisuals(currentStage, isInstant: true);
         }
 
-        /// <summary>
-        /// Changes the current game stage.
-        /// For example, this can be called after the cutscene
-        /// to transition to Stage 2.
-        /// </summary>
+        private void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.Alpha1)) ChangeStage(GameStage.Stage1_Normal);
+            if (Input.GetKeyDown(KeyCode.Alpha2)) ChangeStage(GameStage.Cutscene);
+            if (Input.GetKeyDown(KeyCode.Alpha3)) ChangeStage(GameStage.Stage2_Zombie);
+            if (Input.GetKeyDown(KeyCode.Alpha4)) ChangeStage(GameStage.GameOver);
+        }
+
         public void ChangeStage(GameStage newStage)
         {
-            CurrentStage = newStage;
-            Debug.Log($"[GameManager] Game Stage Transitioned To: {newStage}");
+            if (currentStage == newStage) return;
 
-            // Notify all subscribed systems about the stage change
-            OnStageChanged?.Invoke(CurrentStage);
+            currentStage = newStage;
+            Debug.Log($"<color=yellow>[GameManager]</color> Transitioned to Stage: {currentStage}");
+
+            ApplyStageVisuals(currentStage, isInstant: false);
+            OnStageChanged?.Invoke(currentStage);
+
+            if (newStage == GameStage.GameOver)
+            {
+                OnGameOverTriggered?.Invoke();
+            }
         }
 
         /// <summary>
-        /// Triggers the Game Over state.
-        /// For example, this can be called when an order timer expires.
+        /// خصم صحة اللاعب عند هجوم الزومبي
         /// </summary>
-        public void TriggerGameOver()
+        public void ApplyZombieAttackDamage(int damage)
         {
-            if (CurrentStage == GameStage.GameOver)
-                return;
+            playerHealth = Mathf.Max(0, playerHealth - damage);
+            TriggerCameraShake(0.5f, 0.6f);
 
-            Debug.Log("[GameManager] Game Over Condition Met!");
-            CurrentStage = GameStage.GameOver;
+            if (playerHealth <= 0)
+            {
+                ChangeStage(GameStage.GameOver);
+            }
+        }
 
-            OnGameOverTriggered?.Invoke();
-            OnStageChanged?.Invoke(GameStage.GameOver);
+        private void ApplyStageVisuals(GameStage stage, bool isInstant)
+        {
+            Color targetColor = normalStageColor;
+
+            switch (stage)
+            {
+                case GameStage.Stage1_Normal:
+                    targetColor = normalStageColor;
+                    break;
+                case GameStage.Cutscene:
+                    targetColor = cutsceneColor;
+                    TriggerCameraShake(0.3f, 0.2f);
+                    break;
+                case GameStage.Stage2_Zombie:
+                    targetColor = zombieStageColor;
+                    TriggerCameraShake(0.6f, 0.5f);
+                    break;
+                case GameStage.GameOver:
+                    targetColor = Color.black;
+                    break;
+            }
+
+            float fadeDuration = isInstant ? 0f : 1f;
+
+            if (backgroundSpriteRenderer != null)
+                backgroundSpriteRenderer.DOColor(targetColor, fadeDuration).SetEase(Ease.InOutQuad);
+
+            if (backgroundImageUI != null)
+                backgroundImageUI.DOColor(targetColor, fadeDuration).SetEase(Ease.InOutQuad);
+        }
+
+        public void TriggerCameraShake(float duration, float strength)
+        {
+            if (Camera.main != null)
+            {
+                Camera.main.transform.DOKill();
+                Camera.main.transform.DOShakePosition(duration, strength: strength, vibrato: 12);
+            }
         }
 
         private void OnDestroy()
         {
-            if (Instance == this)
-            {
-                Instance = null;
-            }
+            if (Camera.main != null) Camera.main.transform.DOKill();
         }
     }
 }

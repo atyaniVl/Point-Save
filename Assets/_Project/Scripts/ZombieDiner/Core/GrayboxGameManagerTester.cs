@@ -12,10 +12,10 @@ namespace ZombieDiner.Testing
         [SerializeField] private TextMeshProUGUI stageText;
 
         [Header("Stage Colors for Graybox")]
-        [SerializeField] private Color stage1Color = Color.green;   // Stage 1 (مطعم عادي)
-        [SerializeField] private Color cutsceneColor = Color.black;   // Cutscene (أسود)
-        [SerializeField] private Color stage2Color = Color.red;     // Stage 2 (مطعم زومبي)
-        [SerializeField] private Color gameOverColor = Color.gray;   // Game Over (رمادي)
+        [SerializeField] private Color stage1Color = Color.green;
+        [SerializeField] private Color cutsceneColor = Color.black;
+        [SerializeField] private Color stage2Color = Color.red;
+        [SerializeField] private Color gameOverColor = Color.gray;
 
         private void OnEnable()
         {
@@ -33,7 +33,6 @@ namespace ZombieDiner.Testing
         {
             if (GameManager.Instance == null) return;
 
-            // --- أزرار التحكم للتجربة ---
             if (Input.GetKeyDown(KeyCode.Alpha1))
             {
                 GameManager.Instance.ChangeStage(GameStage.Stage1_Normal);
@@ -49,9 +48,10 @@ namespace ZombieDiner.Testing
                 GameManager.Instance.ChangeStage(GameStage.Stage2_Zombie);
             }
 
-            if (Input.GetKeyDown(KeyCode.Space))
+            // تم التغيير إلى KeyCode.G لتجنب التضارب مع زر Space الخاطئ
+            if (Input.GetKeyDown(KeyCode.G))
             {
-                GameManager.Instance.TriggerGameOver();
+                GameManager.Instance.ChangeStage(GameStage.GameOver);
             }
         }
 

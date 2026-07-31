@@ -28,5 +28,6 @@ namespace ZombieDiner.Orders
 
         [Tooltip("Base price/reward per single unit")]
         public int basePrice = 10;
+        public string itemID => name;
     }
 }
