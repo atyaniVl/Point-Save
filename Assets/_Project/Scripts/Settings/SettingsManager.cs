@@ -1,6 +1,6 @@
-using AudioSystem;
-using System;
+﻿using System;
 using UnityEngine;
+using AudioSystem;
 
 public class SettingsManager : MonoBehaviour
 {
@@ -26,17 +26,33 @@ public class SettingsManager : MonoBehaviour
         Load();
     }
 
+    private void Start()
+    {
+        // تطبيق القيم المحفوظة عند بداية اللعبة
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.SetMusicVolume(Current.MusicVolume);
+            AudioManager.Instance.SetSfxVolume(Current.SfxVolume);
+        }
+    }
+
     public void SetMusic(float value)
     {
         Current.MusicVolume = value;
-        AudioManager.Instance.SetMusicVolume(value);
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.SetMusicVolume(value);
+        }
         Save();
     }
 
     public void SetSfx(float value)
     {
         Current.SfxVolume = value;
-        AudioManager.Instance.SetSfxVolume(value);
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.SetSfxVolume(value);
+        }
         Save();
     }
 

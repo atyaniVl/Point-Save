@@ -1,6 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
+using ZombieDiner.Core;
 
 namespace AudioSystem
 {
@@ -18,6 +19,10 @@ namespace AudioSystem
         [SerializeField] private string masterVolumeParameter = "MasterVolume";
         [SerializeField] private string sfxVolumeParameter = "SfxVolume";
         [SerializeField] private string musicVolumeParameter = "MusicVolume";
+
+        [Header("Stage Music IDs")]
+        [SerializeField] private string normalStageMusicID = "NormalBGM";
+        [SerializeField] private string zombieStageMusicID = "ZombieBGM";
 
         [Header("Data")]
         [SerializeField] private List<SfxClipDataSO> sfxClips = new List<SfxClipDataSO>();
@@ -57,6 +62,45 @@ namespace AudioSystem
             LoadSettings();
         }
 
+        private void OnEnable()
+        {
+            GameManager.OnStageChanged += HandleStageMusic;
+        }
+
+        private void OnDisable()
+        {
+            GameManager.OnStageChanged -= HandleStageMusic;
+        }
+
+        private void Start()
+        {
+            // تشغيل موسيقى المرحلة الابتدائية بعد التأكد من تجهيز كل الـ AudioSources
+            if (GameManager.Instance != null)
+            {
+                HandleStageMusic(GameManager.Instance.CurrentStage);
+            }
+        }
+
+        private void HandleStageMusic(GameStage newStage)
+        {
+            switch (newStage)
+            {
+                case GameStage.Stage1_Normal:
+                    StopAllMusic();
+                    PlayMusic(normalStageMusicID, false);
+                    break;
+
+                case GameStage.Stage2_Zombie:
+                    StopAllMusic();
+                    PlayMusic(zombieStageMusicID, false);
+                    break;
+
+                case GameStage.GameOver:
+                    StopAllMusic();
+                    break;
+            }
+        }
+
         public void PlaySfx(string id)
         {
             PlaySfxInternal(id, 1f, false, 0f, 0f);
@@ -78,10 +122,16 @@ namespace AudioSystem
                 return;
 
             if (!TryGetMusic(id, out var clipData))
+            {
+                Debug.LogWarning($"[AudioManager] Could not find Music SO with ID: {id}");
                 return;
+            }
 
             if (!musicSources.TryGetValue(id, out var source) || source == null)
+            {
+                Debug.LogWarning($"[AudioManager] AudioSource for Music ID '{id}' is missing!");
                 return;
+            }
 
             if (source.isPlaying && !restart)
                 return;
@@ -92,6 +142,7 @@ namespace AudioSystem
             source.outputAudioMixerGroup = clipData.MixerGroup;
             source.pitch = 1f;
             source.Play();
+            Debug.Log($"<color=cyan>[AudioManager]</color> Now Playing Music: {id}");
         }
 
         public void StopMusic(string id)
@@ -217,93 +268,69 @@ namespace AudioSystem
             }
         }
 
-        private void InitializeSources()
+        private bool TryGetSfx(string id, out SfxClipDataSO data)
         {
-            sfxSources.Clear();
-            foreach (var clip in sfxClips)
-            {
-                if (clip == null)
-                    continue;
-
-                var source = CreateSource(sfxSourceRoot, clip.name, clip.MixerGroup, clip.Loop);
-                sfxSources.Add(source);
-            }
-
-            musicSources.Clear();
-            foreach (var clip in musicClips)
-            {
-                if (clip == null)
-                    continue;
-
-                var source = CreateSource(musicSourceRoot, clip.name, clip.MixerGroup, clip.Loop);
-                if (!musicSources.ContainsKey(clip.Id))
-                    musicSources.Add(clip.Id, source);
-            }
+            return sfxLookup.TryGetValue(id, out data);
         }
 
-        private AudioSource CreateSource(Transform parent, string sourceName, AudioMixerGroup mixerGroup, bool loop)
+        private bool TryGetMusic(string id, out MusicClipDataSO data)
         {
-            var gameObject = new GameObject(sourceName);
-            gameObject.transform.SetParent(parent, false);
-            var source = gameObject.AddComponent<AudioSource>();
-            source.playOnAwake = false;
-            source.loop = loop;
-            source.outputAudioMixerGroup = mixerGroup;
-            return source;
+            return musicLookup.TryGetValue(id, out data);
         }
 
         private AudioSource GetAvailableSfxSource()
         {
             foreach (var source in sfxSources)
             {
-                if (source == null)
-                    continue;
-
-                if (!source.isPlaying)
+                if (source != null && !source.isPlaying)
                     return source;
             }
 
-            if (sfxSourceRoot == null)
-                return null;
+            if (sfxSourceRoot != null)
+            {
+                var newSource = sfxSourceRoot.gameObject.AddComponent<AudioSource>();
+                sfxSources.Add(newSource);
+                return newSource;
+            }
 
-            var extraSource = CreateSource(sfxSourceRoot, "Sfx_Extra", null, false);
-            sfxSources.Add(extraSource);
-            return extraSource;
-        }
-
-        private bool TryGetSfx(string id, out SfxClipDataSO clip)
-        {
-            clip = null;
-            if (string.IsNullOrWhiteSpace(id))
-                return false;
-
-            return sfxLookup.TryGetValue(id, out clip) && clip != null && clip.Clip != null;
-        }
-
-        private bool TryGetMusic(string id, out MusicClipDataSO clip)
-        {
-            clip = null;
-            if (string.IsNullOrWhiteSpace(id))
-                return false;
-
-            return musicLookup.TryGetValue(id, out clip) && clip != null && clip.Clip != null;
+            return null;
         }
 
         private void EnsureRoots()
         {
             if (sfxSourceRoot == null)
             {
-                var root = new GameObject("SfxSources");
-                root.transform.SetParent(transform, false);
-                sfxSourceRoot = root.transform;
+                var sfxGO = new GameObject("SFX_Sources");
+                sfxGO.transform.SetParent(transform);
+                sfxSourceRoot = sfxGO.transform;
             }
 
             if (musicSourceRoot == null)
             {
-                var root = new GameObject("MusicSources");
-                root.transform.SetParent(transform, false);
-                musicSourceRoot = root.transform;
+                var musicGO = new GameObject("Music_Sources");
+                musicGO.transform.SetParent(transform);
+                musicSourceRoot = musicGO.transform;
             }
+        }
+
+        private void InitializeSources()
+        {
+            foreach (var kvp in musicLookup)
+            {
+                if (kvp.Value == null) continue;
+                var go = new GameObject($"MusicSource_{kvp.Key}");
+                go.transform.SetParent(musicSourceRoot);
+                var src = go.AddComponent<AudioSource>();
+                src.playOnAwake = false;
+                musicSources[kvp.Key] = src;
+            }
+        }
+
+        private void SetVolume(string parameterName, float volume01)
+        {
+            if (audioMixer == null) return;
+            float dB = volume01 > 0.0001f ? Mathf.Log10(volume01) * 20f : -80f;
+            audioMixer.SetFloat(parameterName, dB);
         }
 
         private void LoadSettings()
@@ -312,37 +339,18 @@ namespace AudioSystem
             sfxEnabled = PlayerPrefs.GetInt(SfxEnabledKey, 1) == 1;
             musicEnabled = PlayerPrefs.GetInt(MusicEnabledKey, 1) == 1;
 
-            var masterVolume = PlayerPrefs.GetFloat(MasterVolumeKey, 1f);
-            var sfxVolume = PlayerPrefs.GetFloat(SfxVolumeKey, 1f);
-            var musicVolume = PlayerPrefs.GetFloat(MusicVolumeKey, 1f);
+            SetMasterVolume(PlayerPrefs.GetFloat(MasterVolumeKey, 1f));
+            SetSfxVolume(PlayerPrefs.GetFloat(SfxVolumeKey, 1f));
+            SetMusicVolume(PlayerPrefs.GetFloat(MusicVolumeKey, 1f));
 
-            SetVolume(masterVolumeParameter, masterVolume);
-            SetVolume(sfxVolumeParameter, sfxVolume);
-            SetVolume(musicVolumeParameter, musicVolume);
             ApplyMuteState();
-        }
-
-        private void SetVolume(string parameter, float volume01)
-        {
-            if (audioMixer == null || string.IsNullOrWhiteSpace(parameter))
-                return;
-
-            var clamped = Mathf.Clamp(volume01, 0.0001f, 1f);
-            var db = Mathf.Log10(clamped) * 20f;
-            audioMixer.SetFloat(parameter, db);
         }
 
         private void ApplyMuteState()
         {
-            if (!masterEnabled)
-            {
-                SetVolume(masterVolumeParameter, 0.0001f);
-                return;
-            }
-
-            SetVolume(masterVolumeParameter, PlayerPrefs.GetFloat(MasterVolumeKey, 1f));
-            SetVolume(sfxVolumeParameter, sfxEnabled ? PlayerPrefs.GetFloat(SfxVolumeKey, 1f) : 0.0001f);
-            SetVolume(musicVolumeParameter, musicEnabled ? PlayerPrefs.GetFloat(MusicVolumeKey, 1f) : 0.0001f);
+            SetVolume(masterVolumeParameter, masterEnabled ? PlayerPrefs.GetFloat(MasterVolumeKey, 1f) : 0f);
+            SetVolume(sfxVolumeParameter, sfxEnabled ? PlayerPrefs.GetFloat(SfxVolumeKey, 1f) : 0f);
+            SetVolume(musicVolumeParameter, musicEnabled ? PlayerPrefs.GetFloat(MusicVolumeKey, 1f) : 0f);
         }
     }
 }

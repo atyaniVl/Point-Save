@@ -21,10 +21,9 @@ namespace ZombieDiner.UI
         [Header("Juice & Tween Settings")]
         [SerializeField] private float popDuration = 0.35f;
         [SerializeField] private float itemStaggerDelay = 0.08f;
-        [SerializeField] private float warningThreshold = 0.35f;
 
         private Dictionary<string, GameObject> activeSlotMap = new Dictionary<string, GameObject>();
-        private Tween warningShakeTween;
+        private Sequence warningShakeSequence;
         private bool isWarningActive = false;
         private Vector3 originalExclamationScale = Vector3.one;
 
@@ -104,13 +103,13 @@ namespace ZombieDiner.UI
                 Transform checkmarkTransform = slotGO.transform.Find("Checkmark");
                 if (checkmarkTransform != null)
                 {
-                    // إذا كان Checkmark زبيلاً لـ QuantityText أو في نفس موقعه
                     checkmarkTransform.gameObject.SetActive(true);
                     checkmarkTransform.localScale = Vector3.zero;
                     checkmarkTransform.DOScale(Vector3.one, 0.35f).SetEase(Ease.OutBack);
                 }
             }
         }
+
         private void AnimateFoodFloating(Transform fromTransform, Transform targetTransform)
         {
             if (fromTransform == null || targetTransform == null) return;
@@ -136,20 +135,16 @@ namespace ZombieDiner.UI
                 patienceFillImage.fillAmount = clampedTime;
                 patienceFillImage.color = Color.Lerp(Color.red, Color.green, clampedTime);
             }
-
-            if (clampedTime <= warningThreshold)
-            {
-                if (!isWarningActive) StartWarningShake();
-            }
-            else
-            {
-                if (isWarningActive) StopWarningShake();
-            }
         }
 
-        private void StartWarningShake()
+        /// <summary>
+        /// 🔹 بدء الاهتزاز والتحذير المرئي (يتم استدعاؤها بالتزامن مع الصوت)
+        /// </summary>
+        public void StartWarningShake()
         {
+            if (isWarningActive) return;
             isWarningActive = true;
+
             if (exclamationMarkIcon != null)
             {
                 exclamationMarkIcon.SetActive(true);
@@ -160,16 +155,35 @@ namespace ZombieDiner.UI
 
             if (bubblePanel != null)
             {
-                warningShakeTween = bubblePanel.transform
-                    .DOShakePosition(0.5f, strength: 4f, vibrato: 15)
-                    .SetLoops(-1, LoopType.Restart);
+                bubblePanel.transform.DOKill();
+
+                // أنيميشن اهتزاز متواصل ومناسب لوضع الخطر مع الصوت
+                warningShakeSequence = DOTween.Sequence();
+                warningShakeSequence.Join(bubblePanel.transform.DOShakePosition(0.5f, strength: new Vector3(4f, 4f, 0f), vibrato: 18, randomness: 90, fadeOut: false))
+                   .Join(bubblePanel.transform.DOShakeRotation(0.5f, strength: new Vector3(0, 0, 3f), vibrato: 18, randomness: 90, fadeOut: false))
+                                   .SetLoops(-1, LoopType.Restart);
             }
         }
 
-        private void StopWarningShake()
+        /// <summary>
+        /// 🔹 إيقاف اهتزاز الفقاعة وإعادة تعيين موقعها
+        /// </summary>
+        public void StopWarningShake()
         {
             isWarningActive = false;
-            if (warningShakeTween != null && warningShakeTween.IsActive()) warningShakeTween.Kill();
+
+            if (warningShakeSequence != null && warningShakeSequence.IsActive())
+            {
+                warningShakeSequence.Kill();
+            }
+
+            if (bubblePanel != null)
+            {
+                bubblePanel.transform.DOKill();
+                bubblePanel.transform.localPosition = Vector3.zero;
+                bubblePanel.transform.localRotation = Quaternion.identity;
+            }
+
             if (exclamationMarkIcon != null)
             {
                 exclamationMarkIcon.transform.DOKill();

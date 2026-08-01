@@ -5,6 +5,7 @@ using ZombieDiner.UI;
 using ZombieDiner.Core;
 using ZombieDiner.Gameplay;
 using DG.Tweening;
+using AudioSystem;
 
 namespace ZombieDiner.Customers
 {
@@ -53,6 +54,9 @@ namespace ZombieDiner.Customers
         private float maxPatience;
         private float remainingPatience;
 
+        // 🔹 متغيّر لمتابعة تشغيل صوت واهتزاز تحذير نفاذ الوقت مرة واحدة فقط
+        private bool hasPlayedWarningSound = false;
+
         private Sequence walkSequence;
         private HashSet<string> deliveredItemIDs = new HashSet<string>();
 
@@ -66,14 +70,12 @@ namespace ZombieDiner.Customers
             if (bubbleUI != null) bubbleUI.HideBubbleImmediate();
         }
 
-        /// <summary>
-        /// 🔹 التهيئة المحدثة لتوافق نظام الطابور الديناميكي (Dynamic Queue System)
-        /// </summary>
         public void InitializeInQueue(Vector3 targetPos, OrderData order, float defaultPatienceTime)
         {
             targetQueuePosition = targetPos;
             currentOrder = order;
             deliveredItemIDs.Clear();
+            hasPlayedWarningSound = false;
 
             bool isZombie = IsZombieStage();
             maxPatience = isZombie ? zombiePatienceDuration : humanPatienceDuration;
@@ -84,16 +86,12 @@ namespace ZombieDiner.Customers
             SetupRandomVisual();
             StartWalkingJuice();
 
-            // تحريك الزبون من نقطة الـ Spawn إلى موقعه في الطابور باستخدام DOTween
             float duration = Vector3.Distance(transform.position, targetQueuePosition) / moveSpeed;
             transform.DOMove(targetQueuePosition, Mathf.Max(0.5f, duration))
                 .SetEase(Ease.Linear)
                 .OnComplete(OnReachedDestination);
         }
 
-        /// <summary>
-        /// 🔹 تحريك الزبون للأمام بنعومة عند إزاحة الطابور (Smooth Queue Shift)
-        /// </summary>
         public void MoveToQueuePosition(Vector3 newPos)
         {
             targetQueuePosition = newPos;
@@ -144,6 +142,11 @@ namespace ZombieDiner.Customers
                 if (bubbleUI != null && currentOrder != null)
                 {
                     bubbleUI.DisplayOrder(currentOrder);
+
+                    if (AudioManager.Instance != null)
+                    {
+                        AudioManager.Instance.PlaySfxRandomPitch("OrderSpawn", 0.95f, 1.05f);
+                    }
                 }
             }
         }
@@ -162,6 +165,25 @@ namespace ZombieDiner.Customers
                 bubbleUI.UpdatePatienceBar(normalizedPatience);
             }
 
+            // ⏳ حساب الثواني الحقيقية المتبقية (Real Seconds Remaining)
+            float realSecondsRemaining = remainingPatience / speedMultiplier;
+
+            // 🔊🫨 تشغيل الصوت والاهتزاز معاً في نفس اللحظة تماماً عند وصول 3 ثوانٍ
+            if (realSecondsRemaining <= 3.0f && !hasPlayedWarningSound)
+            {
+                hasPlayedWarningSound = true;
+
+                if (AudioManager.Instance != null)
+                {
+                    AudioManager.Instance.PlaySfx("TimerWarning");
+                }
+
+                if (bubbleUI != null)
+                {
+                    bubbleUI.StartWarningShake();
+                }
+            }
+
             if (remainingPatience <= 0f)
             {
                 OnPatienceExpired();
@@ -173,9 +195,6 @@ namespace ZombieDiner.Customers
             LeaveUnsatisfied();
         }
 
-        /// <summary>
-        /// 🔹 التسليم الجزئي (Partial Delivery): تسليم صنف واحد من الطلب
-        /// </summary>
         public bool TryDeliverItem(string itemID, Transform playerTransform)
         {
             if (currentState != CustomerState.WaitingForOrder || currentOrder == null) return false;
@@ -194,17 +213,22 @@ namespace ZombieDiner.Customers
 
             deliveredItemIDs.Add(itemID);
 
-            // 1. تفعيل أنيميشن الـ UI وعلامة الصح ✔️
             if (bubbleUI != null)
             {
                 bubbleUI.MarkItemAsDelivered(itemID, playerTransform);
             }
 
-            // 2. مكافأة الوقت: استعادة 25% من الصبر كمهلة
+            // مكافأة الوقت: استعادة 25% من الصبر
             float patienceBonus = maxPatience * 0.25f;
             remainingPatience = Mathf.Min(maxPatience, remainingPatience + patienceBonus);
 
-            // 3. التحقق إذا اكتملت جميع أصناف الطلب
+            float speedMultiplier = IsZombieStage() ? zombiePatienceSpeedMultiplier : 1.0f;
+            if ((remainingPatience / speedMultiplier) > 3.0f)
+            {
+                hasPlayedWarningSound = false;
+                if (bubbleUI != null) bubbleUI.StopWarningShake();
+            }
+
             if (deliveredItemIDs.Count >= currentOrder.items.Count)
             {
                 CompleteOrderSuccessfully();
@@ -249,6 +273,14 @@ namespace ZombieDiner.Customers
         public void AddBonusPatience(float extraTime)
         {
             remainingPatience = Mathf.Min(maxPatience, remainingPatience + extraTime);
+
+            float speedMultiplier = IsZombieStage() ? zombiePatienceSpeedMultiplier : 1.0f;
+            if ((remainingPatience / speedMultiplier) > 3.0f)
+            {
+                hasPlayedWarningSound = false;
+                if (bubbleUI != null) bubbleUI.StopWarningShake();
+            }
+
             transform.DOPunchScale(new Vector3(0.1f, 0.1f, 0f), 0.2f);
         }
 
@@ -257,13 +289,11 @@ namespace ZombieDiner.Customers
             currentState = CustomerState.Leaving;
             if (bubbleUI != null) bubbleUI.HideBubble();
 
-            // إبلاغ مدير التوليد بتحريك الصف للأمام عند خروج هذا الزبون
             if (CustomerSpawnerManager.Instance != null)
             {
                 CustomerSpawnerManager.Instance.OnCustomerLeftQueue(this);
             }
 
-            // إبلاغ الـ WaveManager بالخدمة الناجحة
             if (WaveManager.Instance != null)
             {
                 WaveManager.Instance.OnCustomerFinished(wasServed: true);
@@ -278,13 +308,11 @@ namespace ZombieDiner.Customers
             currentState = CustomerState.Leaving;
             if (bubbleUI != null) bubbleUI.HideBubble();
 
-            // إبلاغ مدير التوليد بتحريك الصف للأمام عند خروج هذا الزبون
             if (CustomerSpawnerManager.Instance != null)
             {
                 CustomerSpawnerManager.Instance.OnCustomerLeftQueue(this);
             }
 
-            // إبلاغ الـ WaveManager بخسارة روح
             if (WaveManager.Instance != null)
             {
                 WaveManager.Instance.OnCustomerFinished(wasServed: false);
@@ -297,7 +325,6 @@ namespace ZombieDiner.Customers
         {
             StartWalkingJuice();
 
-            // تحريك الزبون للخارج (إلى اليسار) وتدميره عند الانتهاء
             transform.DOMove(transform.position + Vector3.left * 10f, 2.5f)
                 .SetEase(Ease.Linear)
                 .OnComplete(() => Destroy(gameObject));

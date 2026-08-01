@@ -36,6 +36,9 @@ namespace ZombieDiner.Core
         private void Start()
         {
             ApplyStageVisuals(currentStage, isInstant: true);
+
+            // تعديل: إطلاق الحدث فور بدء اللعبة حتى يستوعب الـ AudioManager المرحلة الحالية ويشغل الموسيقى
+            OnStageChanged?.Invoke(currentStage);
         }
 
         private void Update()
@@ -54,7 +57,7 @@ namespace ZombieDiner.Core
             Debug.Log($"<color=yellow>[GameManager]</color> Transitioned to Stage: {currentStage}");
 
             ApplyStageVisuals(currentStage, isInstant: false);
-            OnStageChanged?.Invoke(currentStage);
+            OnStageChanged?.Invoke(currentStage); // تنبيه الـ AudioManager وغيره بالتغيير
 
             if (newStage == GameStage.GameOver)
             {
