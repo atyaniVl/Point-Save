@@ -9,8 +9,8 @@ namespace ZombieDiner.Gameplay
         public static WaveManager Instance { get; private set; }
 
         [Header("Wave Settings")]
-        [Tooltip("عدد الزباين المطلوب خدمتهم في Stage 1 للانتقال للـ Cutscene")]
-        [SerializeField] private int stage1MaxCustomers = 10;
+        [Tooltip("عدد الزباين المطلوب خدمتهم في Stage 1 للانتقال للـ Storyboard/Cutscene")]
+        [SerializeField] private int stage1MaxCustomers = 5; // 👈 يمكنك تعديلها بحرية من الـ Inspector
 
         [Header("Player Lives Settings")]
         [SerializeField] private int maxLives = 3;
@@ -39,24 +39,20 @@ namespace ZombieDiner.Gameplay
             OnLivesChanged?.Invoke(currentLives);
         }
 
-        /// <summary>
-        /// 🔹 الدالة المطلوبة: فحص هل يسمح بتوليد زباين إضافيين حسب المرحلة
-        /// </summary>
         public bool CanSpawnMoreCustomers()
         {
             if (GameManager.Instance == null) return false;
 
+            // في Stage 1 يتوقف التوليد إذا وصلنا للعدد المطلوب
             if (GameManager.Instance.CurrentStage == GameStage.Stage1_Normal)
             {
                 return spawnedCustomersCount < stage1MaxCustomers;
             }
 
-            return true; // في Stage 2 أو غيرها يكون التوليد مستمراً
+            // في Stage 2 يكون التوليد مستمراً
+            return GameManager.Instance.CurrentStage == GameStage.Stage2_Zombie;
         }
 
-        /// <summary>
-        /// 🔹 الدالة المطلوبة: تسجيل زبون جديد تم توليده
-        /// </summary>
         public void RegisterSpawnedCustomer()
         {
             spawnedCustomersCount++;
@@ -72,11 +68,14 @@ namespace ZombieDiner.Gameplay
                 LoseLife();
             }
 
+            // فحص اكتمال Stage 1 للانتقال السينمائي
             if (GameManager.Instance != null && GameManager.Instance.CurrentStage == GameStage.Stage1_Normal)
             {
                 if (processedCustomersCount >= stage1MaxCustomers)
                 {
-                    Debug.Log("<color=green>[WaveManager] Stage 1 Completed! Transitioning to Cutscene...</color>");
+                    Debug.Log("<color=green>[WaveManager] Stage 1 Human Customers Finished! Starting Glitch & Storyboard...</color>");
+
+                    // تحويل اللعبة لـ Cutscene لبدء التشويش والستوري بورد
                     GameManager.Instance.ChangeStage(GameStage.Cutscene);
                 }
             }
@@ -89,7 +88,7 @@ namespace ZombieDiner.Gameplay
 
             if (currentLives <= 0)
             {
-                Debug.LogError("<color=red>[Game Over] All 3 lives lost!</color>");
+                Debug.LogError("<color=red>[Game Over] All lives lost!</color>");
                 GameManager.Instance.ChangeStage(GameStage.GameOver);
             }
         }

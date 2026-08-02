@@ -1,6 +1,7 @@
-using UnityEngine;
+﻿using UnityEngine;
 using DG.Tweening;
 using AudioSystem;
+using ZombieDiner.Orders; // 👈 إضافة هذا الـ Namespace للوصول إلى PlateManager
 
 public class TrashBin : MonoBehaviour
 {

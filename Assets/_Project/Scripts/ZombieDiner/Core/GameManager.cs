@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
+using MoreMountains.Feedbacks; // لدعم Feel
 
 namespace ZombieDiner.Core
 {
+   
     public class GameManager : MonoBehaviour
     {
         public static GameManager Instance { get; private set; }
@@ -22,31 +25,43 @@ namespace ZombieDiner.Core
         [SerializeField] private Color cutsceneColor = new Color(0.1f, 0.1f, 0.15f, 1f);
         [SerializeField] private Color zombieStageColor = new Color(0.2f, 0.35f, 0.2f, 1f);
 
+        [Header("Storyboard & Cutscene Settings")]
+        [SerializeField] private GameObject storyboardPanel; // لوحة الـ UI للقصة/الكتسسين
+        [SerializeField] private float glitchDuration = 1.5f; // مدة تأثير التشويش قبل إظهار الستوري بورد
+
+        [Tooltip("إجمالي مدة الـ Storyboard بالثواني التي تتوزع عليها الصور")]
+        [SerializeField] private float cutsceneDuration = 12.0f; // 👈 يمكنك التحكم بها وتعديلها من الـ Inspector
+
+        [SerializeField] private MMF_Player glitchFeelFeedback; // اختياري: Feel Feedback للتشويش
+
         public GameStage CurrentStage => currentStage;
+        public float CutsceneDuration => cutsceneDuration;
 
         public static event Action<GameStage> OnStageChanged;
         public static event Action OnGameOverTriggered;
 
+        private Coroutine cutsceneCoroutine;
+
         private void Awake()
         {
-            if (Instance == null) Instance = this;
-            else Destroy(gameObject);
+            if (Instance == null)
+            {
+                Instance = this;
+            }
+            else
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            if (storyboardPanel != null)
+                storyboardPanel.SetActive(false);
         }
 
         private void Start()
         {
             ApplyStageVisuals(currentStage, isInstant: true);
-
-            // تعديل: إطلاق الحدث فور بدء اللعبة حتى يستوعب الـ AudioManager المرحلة الحالية ويشغل الموسيقى
             OnStageChanged?.Invoke(currentStage);
-        }
-
-        private void Update()
-        {
-            if (Input.GetKeyDown(KeyCode.Alpha1)) ChangeStage(GameStage.Stage1_Normal);
-            if (Input.GetKeyDown(KeyCode.Alpha2)) ChangeStage(GameStage.Cutscene);
-            if (Input.GetKeyDown(KeyCode.Alpha3)) ChangeStage(GameStage.Stage2_Zombie);
-            if (Input.GetKeyDown(KeyCode.Alpha4)) ChangeStage(GameStage.GameOver);
         }
 
         public void ChangeStage(GameStage newStage)
@@ -56,8 +71,16 @@ namespace ZombieDiner.Core
             currentStage = newStage;
             Debug.Log($"<color=yellow>[GameManager]</color> Transitioned to Stage: {currentStage}");
 
-            ApplyStageVisuals(currentStage, isInstant: false);
-            OnStageChanged?.Invoke(currentStage); // تنبيه الـ AudioManager وغيره بالتغيير
+            if (newStage == GameStage.Cutscene)
+            {
+                if (cutsceneCoroutine != null) StopCoroutine(cutsceneCoroutine);
+                cutsceneCoroutine = StartCoroutine(GlitchAndShowStoryboardRoutine());
+            }
+            else
+            {
+                ApplyStageVisuals(currentStage, isInstant: false);
+                OnStageChanged?.Invoke(currentStage);
+            }
 
             if (newStage == GameStage.GameOver)
             {
@@ -65,9 +88,54 @@ namespace ZombieDiner.Core
             }
         }
 
+        private IEnumerator GlitchAndShowStoryboardRoutine()
+        {
+            // 1. تشغيل التشويش واهتزاز الشاشة المبدئي
+            TriggerCameraShake(glitchDuration, 0.8f);
+
+            if (glitchFeelFeedback != null)
+            {
+                glitchFeelFeedback.PlayFeedbacks();
+            }
+
+            ApplyStageVisuals(GameStage.Cutscene, isInstant: false);
+
+            yield return new WaitForSeconds(glitchDuration);
+
+            // 2. إظهار الستوري بورد بـ Scale ناعم وتأكيد تفعيله
+            if (storyboardPanel != null)
+            {
+                storyboardPanel.SetActive(true);
+                storyboardPanel.transform.localScale = Vector3.zero;
+                storyboardPanel.transform.DOScale(Vector3.one, 0.4f).SetEase(Ease.OutBack);
+            }
+        }
+
         /// <summary>
-        /// خصم صحة اللاعب عند هجوم الزومبي
+        /// 🔹 يُستدعى للتحول لمرحلة الزومبي عند انتهاء الستوري بورد أو النقر لتخطيها
         /// </summary>
+        public void StartZombieStageFromUI()
+        {
+            if (cutsceneCoroutine != null)
+            {
+                StopCoroutine(cutsceneCoroutine);
+                cutsceneCoroutine = null;
+            }
+
+            if (storyboardPanel != null && storyboardPanel.activeSelf)
+            {
+                storyboardPanel.transform.DOScale(Vector3.zero, 0.25f).SetEase(Ease.InBack).OnComplete(() =>
+                {
+                    storyboardPanel.SetActive(false);
+                    ChangeStage(GameStage.Stage2_Zombie);
+                });
+            }
+            else
+            {
+                ChangeStage(GameStage.Stage2_Zombie);
+            }
+        }
+
         public void ApplyZombieAttackDamage(int damage)
         {
             playerHealth = Mathf.Max(0, playerHealth - damage);
@@ -81,25 +149,14 @@ namespace ZombieDiner.Core
 
         private void ApplyStageVisuals(GameStage stage, bool isInstant)
         {
-            Color targetColor = normalStageColor;
-
-            switch (stage)
+            Color targetColor = stage switch
             {
-                case GameStage.Stage1_Normal:
-                    targetColor = normalStageColor;
-                    break;
-                case GameStage.Cutscene:
-                    targetColor = cutsceneColor;
-                    TriggerCameraShake(0.3f, 0.2f);
-                    break;
-                case GameStage.Stage2_Zombie:
-                    targetColor = zombieStageColor;
-                    TriggerCameraShake(0.6f, 0.5f);
-                    break;
-                case GameStage.GameOver:
-                    targetColor = Color.black;
-                    break;
-            }
+                GameStage.Stage1_Normal => normalStageColor,
+                GameStage.Cutscene => cutsceneColor,
+                GameStage.Stage2_Zombie => zombieStageColor,
+                GameStage.GameOver => Color.black,
+                _ => normalStageColor
+            };
 
             float fadeDuration = isInstant ? 0f : 1f;
 
@@ -115,13 +172,14 @@ namespace ZombieDiner.Core
             if (Camera.main != null)
             {
                 Camera.main.transform.DOKill();
-                Camera.main.transform.DOShakePosition(duration, strength: strength, vibrato: 12);
+                Camera.main.transform.DOShakePosition(duration, strength: strength, vibrato: 20);
             }
         }
 
         private void OnDestroy()
         {
-            if (Camera.main != null) Camera.main.transform.DOKill();
+            if (Camera.main != null)
+                Camera.main.transform.DOKill();
         }
     }
 }

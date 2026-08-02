@@ -1,106 +1,117 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using ZombieDiner.Orders;
+using ZombieDiner.Visuals;
 
-public class PlateManager : MonoBehaviour
+namespace ZombieDiner.Orders
 {
-    public static PlateManager Instance { get; private set; }
-
-    [SerializeField] private RecipeDatabase recipeDatabase;
-    [SerializeField] private PlateVisual plateVisual;
-
-    private readonly List<ItemSO> ingredients = new List<ItemSO>();
-
-    [SerializeField] private int maxCapacity = 6;
-
-    public RecipeDatabase Database => recipeDatabase;
-    public IReadOnlyList<ItemSO> Ingredients => ingredients;
-
-    public DishSO CurrentDish { get; private set; }
-    public bool IsCompleted => ingredients.Count > 0;
-
-    private void Awake()
+    public class PlateManager : MonoBehaviour
     {
-        Instance = this;
-    }
+        public static PlateManager Instance { get; private set; }
 
-    public void TryAddIngredient(ItemSO item)
-    {
-        if (item == null) return;
+        [Header("References")]
+        [SerializeField] private RecipeDatabase recipeDatabase;
+        [SerializeField] private PlateVisual plateVisual;
 
-        // 1. Try to find a container tool matching item.containerType that is empty
-        PlateVisual targetContainer = null;
-        PlateVisual[] containers = FindObjectsOfType<PlateVisual>();
+        [Header("Plate Capacity")]
+        [SerializeField] private int maxCapacity = 6;
 
-        foreach (var c in containers)
+        private readonly List<ItemSO> ingredients = new List<ItemSO>();
+
+        public RecipeDatabase Database => recipeDatabase;
+        public IReadOnlyList<ItemSO> Ingredients => ingredients;
+        public DishSO CurrentDish { get; private set; }
+        public bool IsCompleted => ingredients.Count > 0;
+
+        private void Awake()
         {
-            if (c != null && c.ContainerType == item.containerType && !c.HasItem)
+            if (Instance == null)
             {
-                targetContainer = c;
-                break;
+                Instance = this;
+            }
+            else
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            // إيجاد الصحن البصري مع استخدام الدالة الحديثة في يونيتي
+            if (plateVisual == null)
+            {
+                plateVisual = FindFirstObjectByType<PlateVisual>();
             }
         }
 
-        // Fallback A: Any empty container tool
-        if (targetContainer == null)
+        /// <summary>
+        /// 🍔 إضافة مكون جديد للصحن المتاح
+        /// </summary>
+        public void TryAddIngredient(ItemSO item)
         {
-            foreach (var c in containers)
+            if (item == null) return;
+
+            // التحقق من أن الصحن لم يصل للحد الأقصى للمكونات
+            if (ingredients.Count >= maxCapacity)
             {
-                if (c != null && !c.HasItem)
-                {
-                    targetContainer = c;
-                    break;
-                }
+                Debug.LogWarning("[PlateManager] Plate capacity limit reached!");
+                return;
             }
-        }
 
-        // Fallback B: Inspector assigned plateVisual
-        if (targetContainer == null)
-        {
-            targetContainer = plateVisual;
-        }
-
-        if (targetContainer != null)
-        {
-            bool filled = targetContainer.TryFillContainer(item);
-            if (filled)
+            if (plateVisual == null)
             {
+                plateVisual = FindFirstObjectByType<PlateVisual>();
+            }
+
+            if (plateVisual != null)
+            {
+                // إضافة المكون للصحن بصرياً
+                plateVisual.OnIngredientAdded(item);
+
+                // تسجيل المكون في بيانات الصحن
                 ingredients.Add(item);
+
+                // إرسال حدث إضافة المكون للأنظمة
                 OrderMakingEvents.RaiseIngredientAdded(item);
             }
+            else
+            {
+                Debug.LogError("[PlateManager] No PlateVisual assigned or found in scene!");
+            }
         }
-    }
 
-    public void ClearPlate()
-    {
-        ingredients.Clear();
-        CurrentDish = null;
-
-        if (plateVisual != null)
+        /// <summary>
+        /// 🧹 تفريغ بيانات الصحن واستعداده للرسبون الجديد
+        /// </summary>
+        public void ClearPlate()
         {
-            plateVisual.Clear();
+            ingredients.Clear();
+            CurrentDish = null;
+
+            if (plateVisual != null)
+            {
+                plateVisual.Clear();
+            }
+
+            OrderMakingEvents.RaisePlateCleared();
         }
 
-        OrderMakingEvents.RaisePlateCleared();
-    }
-
-    private void CompletePlate(DishSO dish)
-    {
-        CurrentDish = dish;
-
-        if (plateVisual != null)
+        /// <summary>
+        /// 🍽️ إكمال طبق معين بـ Recipe خاصة
+        /// </summary>
+        public void CompletePlate(DishSO dish)
         {
-            plateVisual.ShowDish(dish);
+            CurrentDish = dish;
+
+            if (plateVisual != null)
+            {
+                plateVisual.ShowDish(dish);
+            }
+
+            OrderMakingEvents.RaiseDishCompleted(dish);
         }
 
-        OrderMakingEvents.RaiseDishCompleted(dish);
-    }
-
-    private DishSO CreateFallbackDish()
-    {
-        DishSO dish = ScriptableObject.CreateInstance<DishSO>();
-        dish.dishName = ingredients[0] != null ? ingredients[0].itemName : "Test Plate";
-        dish.sprite = ingredients[0] != null ? ingredients[0].itemIcon : null;
-        return dish;
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
     }
 }

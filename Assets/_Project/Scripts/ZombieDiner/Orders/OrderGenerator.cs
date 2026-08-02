@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,6 +11,10 @@ namespace ZombieDiner.Orders
         [Header("Available Item Pool")]
         [Tooltip("List of all individual ItemSO assets available in the project")]
         [SerializeField] private List<ItemSO> availableItemSOs = new List<ItemSO>();
+
+        [Header("Available Dish Pool")]
+        [Tooltip("List of all DishSO assets available for customers to order")]
+        [SerializeField] private List<DishSO> availableDishSOs = new List<DishSO>();
 
         [Header("Difficulty Limits")]
         [Tooltip("Maximum number of distinct item types allowed in Stage 1")]
@@ -42,10 +46,6 @@ namespace ZombieDiner.Orders
             }
         }
 
-        [Header("Available Dish Pool")]
-        [Tooltip("List of all DishSO assets available for customers to order")]
-        [SerializeField] private List<DishSO> availableDishSOs = new List<DishSO>();
-
         private void EnsureItemPool()
         {
             availableItemSOs.RemoveAll(x => x == null);
@@ -70,7 +70,10 @@ namespace ZombieDiner.Orders
         }
 
         /// <summary>
-        /// Generates a dynamic order requesting between 2 and 4 items from the available item pool.
+        /// Generates a dynamic order scaled by current wave progression and difficulty settings.
+        /// Wave 1: 1 single item.
+        /// Wave 2: 2 distinct items (quantity 1 each).
+        /// Wave 3+: Multiple distinct items with scaling quantities.
         /// </summary>
         public OrderData GenerateRandomOrder()
         {
@@ -97,20 +100,54 @@ namespace ZombieDiner.Orders
                 return null;
             }
 
-            // Customer requests 2 to 4 items
-            int itemCount = UnityEngine.Random.Range(2, 5);
+            // 🎯 Wave-based difficulty scaling logic
+            int distinctTypesCount;
+            int maxQuantityPerItem;
+
+            if (currentWave == 1)
+            {
+                // Wave 1: Only 1 item, quantity 1
+                distinctTypesCount = 1;
+                maxQuantityPerItem = 1;
+            }
+            else if (currentWave == 2)
+            {
+                // Wave 2: 2 distinct item types, quantity 1 each
+                distinctTypesCount = Mathf.Min(2, validSOs.Count);
+                maxQuantityPerItem = 1;
+            }
+            else if (currentWave == 3)
+            {
+                // Wave 3: Up to 2 distinct items, quantity up to 2
+                distinctTypesCount = Mathf.Min(2, validSOs.Count);
+                maxQuantityPerItem = 2;
+            }
+            else
+            {
+                // Wave 4+: 2 to 3 distinct items, quantity up to 3
+                int maxAllowedTypes = isZombieStage ? maxDistinctItemsStage2 : maxDistinctItemsStage1;
+                distinctTypesCount = Mathf.Min(UnityEngine.Random.Range(2, maxAllowedTypes + 1), validSOs.Count);
+                maxQuantityPerItem = UnityEngine.Random.Range(2, 4);
+            }
+
+            // Shuffle valid items to get distinct random choices
+            List<ItemSO> poolCopy = new List<ItemSO>(validSOs);
+            Shuffle(poolCopy);
+
             int totalReward = 0;
 
-            for (int i = 0; i < itemCount; i++)
+            for (int i = 0; i < distinctTypesCount; i++)
             {
-                ItemSO selectedSO = validSOs[UnityEngine.Random.Range(0, validSOs.Count)];
+                ItemSO selectedSO = poolCopy[i];
+                int quantity = UnityEngine.Random.Range(1, maxQuantityPerItem + 1);
+
                 newOrder.items.Add(new OrderItem
                 {
                     itemData = selectedSO,
-                    quantity = 1
+                    quantity = quantity
                 });
 
-                totalReward += (selectedSO != null ? selectedSO.basePrice : 10);
+                totalReward += (selectedSO != null ? selectedSO.basePrice : 10) * quantity;
             }
 
             newOrder.rewardAmount = totalReward;
@@ -119,7 +156,7 @@ namespace ZombieDiner.Orders
                 ? DifficultyScalingSystem.Instance.CurrentAllowedDeliveryTime
                 : 15f;
 
-            Debug.Log($"[OrderGenerator] Multi-Item Order Generated ({itemCount} items) | Reward: {totalReward} | Time: {allowedTime}s");
+            Debug.Log($"[OrderGenerator] Order Generated for Wave {currentWave} ({distinctTypesCount} types) | Reward: {totalReward} | Time: {allowedTime}s");
 
             OnOrderGenerated?.Invoke(newOrder, allowedTime);
 

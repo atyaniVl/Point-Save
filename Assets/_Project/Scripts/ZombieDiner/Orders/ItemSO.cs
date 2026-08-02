@@ -1,18 +1,18 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace ZombieDiner.Orders
 {
     public enum ItemStageType
     {
-        Human,  // Standard item for Stage 1 (Human Diner)
-        Zombie  // Horrific item for Stage 2 (Zombie Diner)
+        Human,
+        Zombie
     }
 
     public enum ContainerType
     {
-        Plate,   // Food/Burgers
-        Cup,     // Drinks/Juice/Cola
-        Basket   // Snacks/Fries
+        Plate,
+        Cup,
+        Basket
     }
 
     [CreateAssetMenu(fileName = "NewItemSO", menuName = "Zombie Diner/Item SO")]
@@ -39,6 +39,12 @@ namespace ZombieDiner.Orders
 
         [Tooltip("Base price/reward per single unit")]
         public int basePrice = 10;
-        public string itemID => name;
+
+        [Header("Paired Stage Counterpart (Optional)")]
+        [Tooltip("ضع هنا المكون المقابل في الطور الآخر (مثلاً: البورجر البشري يوضع فيه البورجر الزومبي)")]
+        public ItemSO counterpartItem;
+
+        // 🟢 خاصية موحدة تجنبك أي خطأ في حالة الأحرف (Capital / Small)
+        public string ItemID => string.IsNullOrEmpty(itemId) ? name : itemId;
     }
 }

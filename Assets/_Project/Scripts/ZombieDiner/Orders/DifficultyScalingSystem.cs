@@ -13,7 +13,7 @@ namespace ZombieDiner.Orders
 
         [Header("Stage 1 - Normal Diner Settings")]
         [Tooltip("Initial delivery time for Stage 1 (seconds)")]
-        [SerializeField] private float stage1BaseDeliveryTime = 15f;
+        [SerializeField] private float stage1BaseDeliveryTime = 18f;
 
         [Tooltip("Minimum allowed delivery time in Stage 1")]
         [SerializeField] private float stage1MinDeliveryTime = 8f;
@@ -23,17 +23,17 @@ namespace ZombieDiner.Orders
 
         [Header("Stage 2 - Zombie Diner Settings")]
         [Tooltip("Initial delivery time for the Zombie stage (seconds)")]
-        [SerializeField] private float stage2BaseDeliveryTime = 10f;
+        [SerializeField] private float stage2BaseDeliveryTime = 12f;
 
         [Tooltip("Minimum delivery time allowed to quickly increase difficulty")]
-        [SerializeField] private float stage2MinDeliveryTime = 3f;
+        [SerializeField] private float stage2MinDeliveryTime = 4f;
 
         [Tooltip("Amount of delivery time reduced per wave in the Zombie stage")]
         [SerializeField] private float stage2TimeDecreasePerWave = 0.8f;
 
         [Header("Customer Spawn Rate Settings")]
         [Tooltip("Initial interval between customer spawns (seconds)")]
-        [SerializeField] private float baseSpawnInterval = 4f;
+        [SerializeField] private float baseSpawnInterval = 4.5f;
 
         [Tooltip("Fastest allowed customer spawn interval")]
         [SerializeField] private float minSpawnInterval = 1.2f;

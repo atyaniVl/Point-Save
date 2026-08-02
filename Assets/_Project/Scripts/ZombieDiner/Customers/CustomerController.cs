@@ -4,6 +4,7 @@ using ZombieDiner.Orders;
 using ZombieDiner.UI;
 using ZombieDiner.Core;
 using ZombieDiner.Gameplay;
+using ZombieDiner.Delivery; // 👈 تم إضافة الـ Namespace المفقود الخاص بـ DeliveryZone
 using DG.Tweening;
 using AudioSystem;
 
@@ -54,6 +55,9 @@ namespace ZombieDiner.Customers
         private float maxPatience;
         private float remainingPatience;
 
+        // 🔹 نقطة الخروج المحفوظة لجهة الزبون (يمين أو يسار)
+        private Transform assignedExitPoint;
+
         // 🔹 متغيّر لمتابعة تشغيل صوت واهتزاز تحذير نفاذ الوقت مرة واحدة فقط
         private bool hasPlayedWarningSound = false;
 
@@ -84,14 +88,22 @@ namespace ZombieDiner.Customers
             }
         }
 
+        /// <summary>
+        /// 🔹 تحديد نقطة المغادرة الخاصة بالزبون (تُستدعى من SpawnerManager)
+        /// </summary>
+        public void SetExitPoint(Transform exitPoint)
+        {
+            assignedExitPoint = exitPoint;
+        }
+
         public void InitializeInQueue(Vector3 targetPos, OrderData order, float defaultPatienceTime)
         {
             targetQueuePosition = targetPos;
             currentOrder = order;
 
-            if(TryGetComponent<DeliveryZone>(out var deliveryZone))
+            if (TryGetComponent<DeliveryZone>(out var deliveryZone))
             {
-                //deliveryZone.;
+                // deliveryZone logic if needed
             }
 
             deliveredItemIDs.Clear();
@@ -251,7 +263,7 @@ namespace ZombieDiner.Customers
                 bubbleUI.UpdatePatienceBar(normalizedPatience);
             }
 
-            // ⏳ حساب الثواني الحقيقية المتبقية (Real Seconds Remaining)
+            // ⏳ حساب الثواني الحقيقية المتبقية
             float realSecondsRemaining = remainingPatience / speedMultiplier;
 
             // 🔊🫨 تشغيل الصوت والاهتزاز معاً في نفس اللحظة تماماً عند وصول 3 ثوانٍ
@@ -288,7 +300,7 @@ namespace ZombieDiner.Customers
             bool isNeeded = false;
             foreach (var item in currentOrder.items)
             {
-                if (item.itemData != null && item.itemData.itemID == itemID)
+                if (item.itemData != null && item.itemData.itemId == itemID)
                 {
                     isNeeded = true;
                     break;
@@ -407,12 +419,51 @@ namespace ZombieDiner.Customers
             StartExitAnimation();
         }
 
+        /// <summary>
+        /// 🔹 تحريك الزبون نحو نقطة الخروج المحددة (assignedExitPoint) ثم تدميره
+        /// </summary>
         private void StartExitAnimation()
         {
             StartWalkingJuice();
 
-            transform.DOMove(transform.position + Vector3.left * 10f, 2.5f)
+            Vector3 exitTargetPos;
+            if (assignedExitPoint != null)
+            {
+                exitTargetPos = assignedExitPoint.position;
+            }
+            else
+            {
+                float direction = transform.position.x < 0 ? -12f : 12f;
+                exitTargetPos = transform.position + new Vector3(direction, 0f, 0f);
+            }
+
+            // 💡 1. إضافة إزاحة عشوائية بسيطة في Y لتفادي المشي على نفس الخط تماماً
+            float randomYOffset = Random.Range(-0.25f, 0.25f);
+            exitTargetPos.y += randomYOffset;
+
+            // 💡 2. تعديل سرعة المغادرة قليلاً بشكل عشوائي لكي لا يمشوا بنفس السرعة الميكانيكية
+            float exitSpeed = moveSpeed * Random.Range(1.1f, 1.35f);
+
+            float distance = Vector3.Distance(transform.position, exitTargetPos);
+            float duration = Mathf.Max(0.5f, distance / exitSpeed);
+
+            // 💡 3. رفع الـ Sorting Order لكي لا يختفي الزبون المغادر تحت الزباين الثابتين في الطابور
+            if (customerSpriteRenderer != null)
+            {
+                customerSpriteRenderer.sortingOrder += 10;
+            }
+
+            // حركة الخروج مع سرعة وإزاحة ديناميكية
+            transform.DOMove(exitTargetPos, duration)
                 .SetEase(Ease.Linear)
+                .OnUpdate(() =>
+                {
+                    // تحديث الطبقات ديناميكياً أثناء المشي لضمان عدم التداخل البصري
+                    if (customerSpriteRenderer != null)
+                    {
+                        customerSpriteRenderer.sortingOrder = Mathf.RoundToInt(-transform.position.y * 100) + 100;
+                    }
+                })
                 .OnComplete(() => Destroy(gameObject));
         }
 

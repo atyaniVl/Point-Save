@@ -10,11 +10,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8eae60ba6f754044aab9c44a182e17bc, type: 3}
-  m_Name: SO_Fries
+  m_Name: Normal Cola
   m_EditorClassIdentifier: 
-  itemId: Fries
-  itemName: Fries
-  itemIcon: {fileID: 21300028, guid: 7ab74e659e1f0a34d9cfec21c478fc12, type: 3}
-  containerType: 2
+  itemId: Cola
+  itemName: Cola
+  itemIcon: {fileID: 21300000, guid: 01b67f464299ef940bfc49c9d4bdf31f, type: 3}
+  containerType: 1
   stageType: 0
-  basePrice: 8
+  basePrice: 5

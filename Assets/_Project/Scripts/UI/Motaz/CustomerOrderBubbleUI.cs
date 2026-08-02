@@ -50,48 +50,105 @@ namespace ZombieDiner.UI
                 bubblePanel.transform.DOScale(Vector3.one, popDuration).SetEase(Ease.OutBack);
             }
 
+            // تنظيف الحاوية من العناصر القديمة
             foreach (Transform child in itemsContainer)
             {
                 Destroy(child.gameObject);
             }
 
+            // 1️⃣ حالة الـ Requested Dish (إذا كان الطلب طبقاً كاملاً جاهزاً)
             if (orderData.requestedDish != null && itemSlotPrefab != null && itemsContainer != null)
             {
                 GameObject slotGO = Instantiate(itemSlotPrefab, itemsContainer);
                 slotGO.transform.localScale = Vector3.zero;
 
-                Image itemImage = slotGO.transform.Find("ItemIcon")?.GetComponent<Image>();
-                TextMeshProUGUI quantityText = slotGO.transform.Find("QuantityText")?.GetComponent<TextMeshProUGUI>();
+                Image itemImage = GetItemImageComponent(slotGO);
+                TextMeshProUGUI quantityText = GetQuantityTextComponent(slotGO);
 
-                if (itemImage == null) itemImage = slotGO.GetComponentInChildren<Image>();
-                if (quantityText == null) quantityText = slotGO.GetComponentInChildren<TextMeshProUGUI>();
+                if (itemImage != null)
+                {
+                    if (orderData.requestedDish.sprite != null)
+                    {
+                        itemImage.sprite = orderData.requestedDish.sprite;
+                        itemImage.enabled = true;
+                        itemImage.color = Color.white; // ضمان عدم شفافية اللون
+                    }
+                    else
+                    {
+                        itemImage.enabled = false;
+                        Debug.LogWarning($"[CustomerOrderBubbleUI] Missing Sprite for Dish: {orderData.requestedDish.dishName}");
+                    }
+                }
 
-                if (itemImage != null && orderData.requestedDish.sprite != null) itemImage.sprite = orderData.requestedDish.sprite;
-                if (quantityText != null) quantityText.text = orderData.requestedDish.dishName;
+                if (quantityText != null)
+                {
+                    quantityText.text = orderData.requestedDish.dishName;
+                }
 
                 activeSlotMap[orderData.requestedDish.dishName] = slotGO;
                 slotGO.transform.DOScale(Vector3.one, 0.25f).SetEase(Ease.OutBack);
                 return;
             }
 
-            int itemIndex = 0;
-            foreach (var item in orderData.items)
+            // 2️⃣ دمج العناصر المتكررة داخل القائمة وتجميع أعدادها
+            Dictionary<ItemSO, int> aggregatedItems = new Dictionary<ItemSO, int>();
+            if (orderData.items != null)
             {
-                if (item == null || item.itemData == null) continue;
+                foreach (var item in orderData.items)
+                {
+                    if (item == null || item.itemData == null) continue;
+
+                    ItemSO itemData = item.itemData;
+                    int quantity = Mathf.Max(1, item.quantity);
+
+                    if (aggregatedItems.ContainsKey(itemData))
+                    {
+                        aggregatedItems[itemData] += quantity;
+                    }
+                    else
+                    {
+                        aggregatedItems.Add(itemData, quantity);
+                    }
+                }
+            }
+
+            // 3️⃣ إنشاء الـ Slots الفريدة فقط بالعنصر وإجمالي عدده
+            int itemIndex = 0;
+            foreach (var kvp in aggregatedItems)
+            {
+                ItemSO itemData = kvp.Key;
+                int totalQuantity = kvp.Value;
 
                 GameObject slotGO = Instantiate(itemSlotPrefab, itemsContainer);
                 slotGO.transform.localScale = Vector3.zero;
 
-                Image itemImage = slotGO.transform.Find("ItemIcon")?.GetComponent<Image>();
-                TextMeshProUGUI quantityText = slotGO.transform.Find("QuantityText")?.GetComponent<TextMeshProUGUI>();
+                Image itemImage = GetItemImageComponent(slotGO);
+                TextMeshProUGUI quantityText = GetQuantityTextComponent(slotGO);
 
-                if (itemImage == null) itemImage = slotGO.GetComponentInChildren<Image>();
-                if (quantityText == null) quantityText = slotGO.GetComponentInChildren<TextMeshProUGUI>();
+                // تعيين الصورة والتأكد من تفعيل المكون وتلوينه بالأبيض النقي
+                if (itemImage != null)
+                {
+                    if (itemData.itemIcon != null)
+                    {
+                        itemImage.sprite = itemData.itemIcon;
+                        itemImage.enabled = true;
+                        itemImage.color = Color.white; // حماية ضد الألوان المعتمة أو الشفافة
+                    }
+                    else
+                    {
+                        itemImage.enabled = false; // إخفاء المكون لتجنب المربع الأبيض الفارغ
+                        Debug.LogWarning($"[CustomerOrderBubbleUI] Missing ItemIcon in ScriptableObject for Item: {itemData.name}");
+                    }
+                }
 
-                if (itemImage != null) itemImage.sprite = item.itemData.itemIcon;
-                if (quantityText != null) quantityText.text = $"x{item.quantity}";
+                if (quantityText != null)
+                {
+                    quantityText.text = $"x{totalQuantity}";
+                }
 
-                activeSlotMap[item.itemData.itemID] = slotGO;
+                // قراءة الـ ID المعياري الشامل
+                string key = GetItemKey(itemData);
+                activeSlotMap[key] = slotGO;
 
                 float delay = itemIndex * itemStaggerDelay;
                 slotGO.transform.DOScale(Vector3.one, 0.25f).SetDelay(delay).SetEase(Ease.OutBack);
@@ -104,21 +161,36 @@ namespace ZombieDiner.UI
         {
             if (orderData == null || fulfilledCounts == null) return;
 
+            // حساب الإجمالي المطلوب لكل عنصر بعد الدمج
+            Dictionary<string, int> totalRequiredMap = new Dictionary<string, int>();
             foreach (var item in orderData.items)
             {
                 if (item == null || item.itemData == null) continue;
-                string key = string.IsNullOrEmpty(item.itemData.itemID) ? item.itemData.name : item.itemData.itemID;
+                string key = GetItemKey(item.itemData);
+                int q = Mathf.Max(1, item.quantity);
+
+                if (totalRequiredMap.ContainsKey(key))
+                    totalRequiredMap[key] += q;
+                else
+                    totalRequiredMap.Add(key, q);
+            }
+
+            // تحديث العرض بناءً على المسلم إزاء الإجمالي المطلوب
+            foreach (var kvp in totalRequiredMap)
+            {
+                string key = kvp.Key;
+                int totalRequired = kvp.Value;
                 int fulfilled = fulfilledCounts.ContainsKey(key) ? fulfilledCounts[key] : 0;
 
                 if (activeSlotMap.TryGetValue(key, out GameObject slotGO))
                 {
-                    TextMeshProUGUI quantityText = slotGO.transform.Find("QuantityText")?.GetComponent<TextMeshProUGUI>();
-                    if (quantityText == null) quantityText = slotGO.GetComponentInChildren<TextMeshProUGUI>();
+                    TextMeshProUGUI quantityText = GetQuantityTextComponent(slotGO);
 
-                    int remaining = item.quantity - fulfilled;
+                    int remaining = totalRequired - fulfilled;
                     if (remaining <= 0)
                     {
                         if (quantityText != null) quantityText.gameObject.SetActive(false);
+
                         Transform checkmarkTransform = slotGO.transform.Find("Checkmark");
                         if (checkmarkTransform != null)
                         {
@@ -129,31 +201,29 @@ namespace ZombieDiner.UI
                     }
                     else
                     {
-                        if (quantityText != null) quantityText.text = $"x{remaining}";
+                        if (quantityText != null)
+                        {
+                            quantityText.gameObject.SetActive(true);
+                            quantityText.text = $"x{remaining}";
+                        }
                         slotGO.transform.DOPunchScale(Vector3.one * 0.15f, 0.2f);
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// 🔹 وضع علامة صح فوق نص العدد (QuantityText) عند تسليم العنصر جزئياً
-        /// </summary>
         public void MarkItemAsDelivered(string itemID, Transform startWorldPos)
         {
             if (activeSlotMap.TryGetValue(itemID, out GameObject slotGO))
             {
-                // 1. إطلاق أنيميشن طيران الأكل
                 AnimateFoodFloating(startWorldPos, slotGO.transform);
 
-                // 2. البحث عن نص العدد وإخفاؤه
-                Transform quantityTextTransform = slotGO.transform.Find("QuantityText");
-                if (quantityTextTransform != null)
+                TextMeshProUGUI quantityText = GetQuantityTextComponent(slotGO);
+                if (quantityText != null)
                 {
-                    quantityTextTransform.gameObject.SetActive(false);
+                    quantityText.gameObject.SetActive(false);
                 }
 
-                // 3. إظهار علامة الصح ✔️ مكان النص مع أنيميشن Pop ناعم
                 Transform checkmarkTransform = slotGO.transform.Find("Checkmark");
                 if (checkmarkTransform != null)
                 {
@@ -175,7 +245,10 @@ namespace ZombieDiner.UI
                 .SetEase(Ease.OutQuad)
                 .OnComplete(() =>
                 {
-                    targetTransform.DOPunchScale(Vector3.one * 0.2f, 0.2f);
+                    if (targetTransform != null)
+                    {
+                        targetTransform.DOPunchScale(Vector3.one * 0.2f, 0.2f);
+                    }
                     Destroy(floatingObj);
                 });
         }
@@ -191,9 +264,6 @@ namespace ZombieDiner.UI
             }
         }
 
-        /// <summary>
-        /// 🔹 بدء الاهتزاز والتحذير المرئي (يتم استدعاؤها بالتزامن مع الصوت)
-        /// </summary>
         public void StartWarningShake()
         {
             if (isWarningActive) return;
@@ -211,17 +281,13 @@ namespace ZombieDiner.UI
             {
                 bubblePanel.transform.DOKill();
 
-                // أنيميشن اهتزاز متواصل ومناسب لوضع الخطر مع الصوت
                 warningShakeSequence = DOTween.Sequence();
                 warningShakeSequence.Join(bubblePanel.transform.DOShakePosition(0.5f, strength: new Vector3(4f, 4f, 0f), vibrato: 18, randomness: 90, fadeOut: false))
                    .Join(bubblePanel.transform.DOShakeRotation(0.5f, strength: new Vector3(0, 0, 3f), vibrato: 18, randomness: 90, fadeOut: false))
-                                   .SetLoops(-1, LoopType.Restart);
+                   .SetLoops(-1, LoopType.Restart);
             }
         }
 
-        /// <summary>
-        /// 🔹 إيقاف اهتزاز الفقاعة وإعادة تعيين موقعها
-        /// </summary>
         public void StopWarningShake()
         {
             isWarningActive = false;
@@ -267,6 +333,53 @@ namespace ZombieDiner.UI
                 bubblePanel.SetActive(false);
             }
         }
+
+        #region Helpers
+
+        /// <summary>
+        /// جلب مكون الـ Image المخصص للأيقونة بدقة حتى وإن كان الـ Slot يمتلك Image رئيسي كخلفية
+        /// </summary>
+        private Image GetItemImageComponent(GameObject slotGO)
+        {
+            Transform iconTransform = slotGO.transform.Find("ItemIcon");
+            if (iconTransform != null)
+            {
+                return iconTransform.GetComponent<Image>();
+            }
+
+            // في حال عدم وجود ItemIcon كـ Child أعد جلب مكون الابن المتاح
+            Image[] images = slotGO.GetComponentsInChildren<Image>(true);
+            foreach (var img in images)
+            {
+                if (img.gameObject != slotGO) return img; // إرجاع الصورة الابن وليس خلفية الأب
+            }
+
+            return slotGO.GetComponent<Image>();
+        }
+
+        /// <summary>
+        /// جلب مكون النص بشكل مضمون
+        /// </summary>
+        private TextMeshProUGUI GetQuantityTextComponent(GameObject slotGO)
+        {
+            Transform textTransform = slotGO.transform.Find("QuantityText");
+            if (textTransform != null)
+            {
+                return textTransform.GetComponent<TextMeshProUGUI>();
+            }
+            return slotGO.GetComponentInChildren<TextMeshProUGUI>(true);
+        }
+
+        /// <summary>
+        /// دالة مساعدة لاستخراج المفتاح التعريفي الصحيح للعنصر
+        /// </summary>
+        private string GetItemKey(ItemSO itemSO)
+        {
+            if (itemSO == null) return string.Empty;
+            return !string.IsNullOrEmpty(itemSO.itemId) ? itemSO.itemId : itemSO.name;
+        }
+
+        #endregion
 
         private void OnDestroy()
         {

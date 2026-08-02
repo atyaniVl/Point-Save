@@ -1,30 +1,36 @@
-using UnityEngine;
+﻿using UnityEngine;
+using ZombieDiner.Customers;
+using ZombieDiner.Orders; // 👈 تم إضافة نطاق الأسماء للوصول إلى PlateManager
 
-public class DeliveryZone : MonoBehaviour
+namespace ZombieDiner.Delivery
 {
-    private CustomerOrderReceiver customerOrderReceiver;
-
-    private void Awake()
+    public class DeliveryZone : MonoBehaviour
     {
-        customerOrderReceiver = GetComponent<CustomerOrderReceiver>();
-    }
+        private CustomerOrderReceiver customerOrderReceiver;
 
-    private void OnMouseDown()
-    {
-        Deliver(customerOrderReceiver);
-    }
-
-    public void Deliver(CustomerOrderReceiver receiver)
-    {
-        if (receiver == null || PlateManager.Instance == null)
+        private void Awake()
         {
-            return;
+            customerOrderReceiver = GetComponent<CustomerOrderReceiver>();
         }
 
-        if (PlateManager.Instance.Ingredients != null && PlateManager.Instance.Ingredients.Count > 0)
+        private void OnMouseDown()
         {
-            receiver.ReceivePlateItems(PlateManager.Instance.Ingredients, PlateManager.Instance.CurrentDish);
-            PlateManager.Instance.ClearPlate();
+            Deliver(customerOrderReceiver);
+        }
+
+        public void Deliver(CustomerOrderReceiver receiver)
+        {
+            // 🛑 تصحيح حرف m الصغير إلى M الكبير في PlateManager
+            if (receiver == null || PlateManager.Instance == null)
+            {
+                return;
+            }
+
+            if (PlateManager.Instance.Ingredients != null && PlateManager.Instance.Ingredients.Count > 0)
+            {
+                receiver.ReceivePlateItems(PlateManager.Instance.Ingredients, PlateManager.Instance.CurrentDish);
+                PlateManager.Instance.ClearPlate();
+            }
         }
     }
 }

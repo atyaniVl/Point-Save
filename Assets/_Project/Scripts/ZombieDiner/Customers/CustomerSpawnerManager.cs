@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using DG.Tweening;
 using ZombieDiner.Core;
 using ZombieDiner.Orders;
 using ZombieDiner.Gameplay;
@@ -11,35 +10,30 @@ namespace ZombieDiner.Customers
     {
         public static CustomerSpawnerManager Instance { get; private set; }
 
-        [Header("Prefab & Spawn Point")]
-        [Tooltip("Customer Prefab containing CustomerController and World Space Canvas UI")]
+        [Header("Prefab & Multi-Spawn Points")]
         [SerializeField] private GameObject customerPrefab;
 
-        [Tooltip("Point where customers appear initially before moving to counter")]
-        [SerializeField] private Transform spawnPoint;
+        [Tooltip("نقاط التوليد من اليسار (ضع النقطتين هنا)")]
+        [SerializeField] private Transform[] spawnPointsLeft;
 
-        [Header("Dynamic Queue Settings")]
-        [Tooltip("نقطة بداية الطابور (الزبون الأول الملافي للخدمة)")]
-        [SerializeField] private Transform queueStartPoint;
+        [Tooltip("نقاط التوليد من اليمين (ضع النقطتين هنا)")]
+        [SerializeField] private Transform[] spawnPointsRight;
 
-        [Tooltip("المسافة الفاصلة بين كل زبون والذي يليه في الصف")]
-        [SerializeField] private float queueSpacing = 1.3f;
+        [Header("Queue Center & Spacing")]
+        [Tooltip("نقطة المنتصف حيث يقف أول زبون تماماً")]
+        [SerializeField] private Transform centerPoint;
 
-        [Tooltip("اتجاه امتداد الطابور (مثال: Vector2.right أو Vector2.left)")]
-        [SerializeField] private Vector2 queueDirection = Vector2.right;
+        [Tooltip("المسافة الأفقية بين كل زبون والذي يليه لتفادي التداخل")]
+        [SerializeField] private float queueSpacing = 3.2f;
 
-        [Tooltip("الحد الأقصى لعدد الزباين في الطابور بنفس الوقت")]
-        [SerializeField] private int maxQueueCapacity = 8;
-
-        [Header("Queue Depth Layers")]
-        [Tooltip("عدد طبقات الـ Y لإعطاء منظور العمق للموقف (مثال: 3 طبقات)")]
-        [SerializeField] private int yLayersCount = 3;
-
-        [Tooltip("المسافة العمودية بين كل طبقة والتي تليها خلفها")]
-        [SerializeField] private float yLayerOffset = 0.45f;
+        [Tooltip("الحد الأقصى لعدد الزباين في الطابور")]
+        [SerializeField] private int maxQueueCapacity = 5;
 
         private CustomerController[] activeSlots;
         private float spawnTimer;
+
+        private int leftCount = 0;
+        private int rightCount = 0;
 
         private void Awake()
         {
@@ -57,19 +51,18 @@ namespace ZombieDiner.Customers
             }
         }
 
-        public int GetFirstFreeSlotIndex()
+        public bool IsQueueFull()
         {
             InitializeSlots();
             for (int i = 0; i < activeSlots.Length; i++)
             {
-                if (activeSlots[i] == null) return i;
+                if (activeSlots[i] == null) return false;
             }
-            return -1;
+            return true;
         }
 
         private void Update()
         {
-            // إيقاف التوليد في حالة الـ Cutscene أو GameOver
             if (GameManager.Instance != null &&
                (GameManager.Instance.CurrentStage == GameStage.Cutscene ||
                 GameManager.Instance.CurrentStage == GameStage.GameOver))
@@ -77,15 +70,15 @@ namespace ZombieDiner.Customers
                 return;
             }
 
-            // فحص حد التوليد لـ Stage 1 (الـ 10 زباين) من الـ WaveManager
             if (WaveManager.Instance != null && !WaveManager.Instance.CanSpawnMoreCustomers())
             {
                 return;
             }
 
+            if (IsQueueFull()) return;
+
             spawnTimer += Time.deltaTime;
 
-            // جلب معدل التوليد حسب الصعوبة
             float currentSpawnInterval = DifficultyScalingSystem.Instance != null
                 ? DifficultyScalingSystem.Instance.CurrentSpawnInterval
                 : 5f;
@@ -97,37 +90,50 @@ namespace ZombieDiner.Customers
             }
         }
 
-        /// <summary>
-        /// توليد زبون جديد وإسناد موقع ثابت له دون إزاحة الزباين الحاليين
-        /// </summary>
         public void TrySpawnCustomer()
         {
-            int freeSlotIndex = GetFirstFreeSlotIndex();
-            if (freeSlotIndex == -1)
+            if (IsQueueFull()) return;
+
+            // 1. تحديد رقم الخانة في الطابور
+            int assignedSlotIndex = DecideNextSlotIndex();
+            if (assignedSlotIndex == int.MinValue) return;
+
+            Vector3 targetQueuePos = GetQueuePositionFromSlot(assignedSlotIndex);
+
+            // 2. تحديد الجهة (يسار أم يمين)
+            bool isLeftCustomer = (assignedSlotIndex < 0);
+            if (assignedSlotIndex == 0)
             {
-                // الطابور ممتلئ، انتظار الدورة القادمة
-                return;
+                isLeftCustomer = Random.value > 0.5f;
             }
 
-            // 1. حساب موضع الوقوف المستهدف للزبون بناءً على الـ Slot الشاغر
-            Vector3 targetQueuePos = GetQueuePosition(freeSlotIndex);
-            Vector3 spawnPos = spawnPoint != null ? spawnPoint.position : targetQueuePos;
+            // 3. اختيار نقطة التوليد المناسبة من القائمة (حسب عمق الخانة)
+            Transform selectedSpawnPoint = GetSpawnPointForSlot(assignedSlotIndex, isLeftCustomer);
 
+            Vector3 spawnPos = selectedSpawnPoint != null ? selectedSpawnPoint.position : targetQueuePos;
+
+            // 4. التوليد والإسناد
             GameObject newCustomerGO = Instantiate(customerPrefab, spawnPos, Quaternion.identity);
             CustomerController customer = newCustomerGO.GetComponent<CustomerController>();
 
             if (customer != null)
             {
-                // حجز الـ Slot للزبون
-                activeSlots[freeSlotIndex] = customer;
+                int arrayIndex = SlotToArrayIndex(assignedSlotIndex);
+                activeSlots[arrayIndex] = customer;
 
-                // إبلاغ الـ WaveManager بزيادة العداد
+                customer.SetExitPoint(selectedSpawnPoint);
+
+                SpriteRenderer sr = newCustomerGO.GetComponent<SpriteRenderer>();
+                if (sr != null)
+                {
+                    sr.sortingOrder = 100 - Mathf.Abs(assignedSlotIndex);
+                }
+
                 if (WaveManager.Instance != null)
                 {
                     WaveManager.Instance.RegisterSpawnedCustomer();
                 }
 
-                // توليد بيانات الطلب والصبر
                 OrderData generatedOrder = OrderGenerator.Instance != null
                     ? OrderGenerator.Instance.GenerateRandomOrder()
                     : null;
@@ -136,29 +142,84 @@ namespace ZombieDiner.Customers
                     ? DifficultyScalingSystem.Instance.CurrentAllowedDeliveryTime
                     : 15f;
 
-                // تهيئة الزبون والبدء بالتحرك لنقطته الثابتة
                 customer.InitializeInQueue(targetQueuePos, generatedOrder, patienceTime);
             }
         }
 
         /// <summary>
-        /// 🔹 حساب الموقع المطلوب بناءً على الـ Index والـ Spacing وطبقات العمق الـ 3
+        /// اختيار نقطة الـ Spawn بناءً على تسلسل الخانة (الزبون الأول يأخذ النقطة 0، والزبون الثاني يأخذ النقطة 1)
         /// </summary>
-        public Vector3 GetQueuePosition(int index)
+        private Transform GetSpawnPointForSlot(int slotIndex, bool isLeft)
         {
-            Vector3 startPos = queueStartPoint != null ? queueStartPoint.position : transform.position;
-            Vector3 horizontalOffset = (Vector3)(queueDirection.normalized * (index * queueSpacing));
+            Transform[] points = isLeft ? spawnPointsLeft : spawnPointsRight;
+            if (points == null || points.Length == 0) return null;
 
-            int yLayer = index % Mathf.Max(1, yLayersCount);
-            float yOffset = yLayer * yLayerOffset;
-            float zOffset = yLayer * 0.15f;
+            // حساب عمق الخانة (1 للزبون الأول في الجهة، 2 للزبون الثاني...)
+            int depthIndex = Mathf.Abs(slotIndex);
+            if (slotIndex == 0) depthIndex = 0;
+            else depthIndex = depthIndex - 1; // تحويله لـ Index يبدأ من 0
 
-            return startPos + horizontalOffset + new Vector3(0f, yOffset, zOffset);
+            int pointIndex = Mathf.Clamp(depthIndex, 0, points.Length - 1);
+            return points[pointIndex];
         }
 
-        /// <summary>
-        /// 🔹 تحرير موقع الزبون المغادر دون إزاحة باقي الزباين من أماكنهم
-        /// </summary>
+        private int DecideNextSlotIndex()
+        {
+            if (activeSlots[0] == null) return 0;
+
+            List<int> availableOptions = new List<int>();
+
+            int nextLeft = -(leftCount + 1);
+            if (CanOccupySlot(nextLeft)) availableOptions.Add(nextLeft);
+
+            int nextRight = (rightCount + 1);
+            if (CanOccupySlot(nextRight)) availableOptions.Add(nextRight);
+
+            if (availableOptions.Count == 0)
+            {
+                for (int i = 1; i < maxQueueCapacity; i++)
+                {
+                    if (CanOccupySlot(-i)) { availableOptions.Add(-i); break; }
+                }
+                for (int i = 1; i < maxQueueCapacity; i++)
+                {
+                    if (CanOccupySlot(i)) { availableOptions.Add(i); break; }
+                }
+            }
+
+            if (availableOptions.Count == 0) return int.MinValue;
+
+            int chosenSlot = availableOptions[Random.Range(0, availableOptions.Count)];
+
+            if (chosenSlot < 0 && Mathf.Abs(chosenSlot) > leftCount) leftCount = Mathf.Abs(chosenSlot);
+            else if (chosenSlot > 0 && chosenSlot > rightCount) rightCount = chosenSlot;
+
+            return chosenSlot;
+        }
+
+        private bool CanOccupySlot(int slotIndex)
+        {
+            int arrayIndex = SlotToArrayIndex(slotIndex);
+            return arrayIndex >= 0 && arrayIndex < maxQueueCapacity && activeSlots[arrayIndex] == null;
+        }
+
+        public Vector3 GetQueuePositionFromSlot(int slotIndex)
+        {
+            Vector3 baseCenter = centerPoint != null ? centerPoint.position : transform.position;
+
+            float xOffset = slotIndex * queueSpacing;
+            float zOffset = Mathf.Abs(slotIndex) * 0.05f;
+
+            return baseCenter + new Vector3(xOffset, 0f, zOffset);
+        }
+
+        private int SlotToArrayIndex(int slotIndex)
+        {
+            if (slotIndex == 0) return 0;
+            if (slotIndex < 0) return (Mathf.Abs(slotIndex) * 2) - 1;
+            return slotIndex * 2;
+        }
+
         public void OnCustomerLeftQueue(CustomerController customer)
         {
             InitializeSlots();
@@ -169,6 +230,20 @@ namespace ZombieDiner.Customers
                     activeSlots[i] = null;
                     break;
                 }
+            }
+
+            RecalculateSideCounts();
+        }
+
+        private void RecalculateSideCounts()
+        {
+            leftCount = 0;
+            rightCount = 0;
+
+            for (int i = 1; i < maxQueueCapacity; i++)
+            {
+                if (!CanOccupySlot(-i)) leftCount = i;
+                if (!CanOccupySlot(i)) rightCount = i;
             }
         }
     }

@@ -14,6 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemId: Burger
   itemName: Burger
-  itemIcon: {fileID: 1178595843, guid: 6582f34ddd5f686408c019550cd94c9d, type: 3}
+  itemIcon: {fileID: 21300000, guid: dc343ff9e76a62d4f8e3ff16c74cb162, type: 3}
+  containerType: 0
   stageType: 0
   basePrice: 10
+  counterpartItem: {fileID: 0}
