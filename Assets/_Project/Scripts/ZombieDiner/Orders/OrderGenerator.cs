@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -34,6 +34,7 @@ namespace ZombieDiner.Orders
             if (Instance == null)
             {
                 Instance = this;
+                EnsureItemPool();
             }
             else
             {
@@ -41,11 +42,40 @@ namespace ZombieDiner.Orders
             }
         }
 
+        [Header("Available Dish Pool")]
+        [Tooltip("List of all DishSO assets available for customers to order")]
+        [SerializeField] private List<DishSO> availableDishSOs = new List<DishSO>();
+
+        private void EnsureItemPool()
+        {
+            availableItemSOs.RemoveAll(x => x == null);
+            if (availableItemSOs.Count == 0)
+            {
+                var loaded = Resources.FindObjectsOfTypeAll<ItemSO>();
+                if (loaded != null && loaded.Length > 0)
+                {
+                    availableItemSOs.AddRange(loaded);
+                }
+            }
+
+            availableDishSOs.RemoveAll(x => x == null);
+            if (availableDishSOs.Count == 0)
+            {
+                var loadedDishes = Resources.FindObjectsOfTypeAll<DishSO>();
+                if (loadedDishes != null && loadedDishes.Length > 0)
+                {
+                    availableDishSOs.AddRange(loadedDishes);
+                }
+            }
+        }
+
         /// <summary>
-        /// Generates a dynamic order procedurally based on current GameStage, Wave, and Difficulty limits.
+        /// Generates a dynamic order requesting between 2 and 4 items from the available item pool.
         /// </summary>
         public OrderData GenerateRandomOrder()
         {
+            EnsureItemPool();
+
             bool isZombieStage = Core.GameManager.Instance != null &&
                                  Core.GameManager.Instance.CurrentStage == Core.GameStage.Stage2_Zombie;
 
@@ -53,56 +83,44 @@ namespace ZombieDiner.Orders
                 ? DifficultyScalingSystem.Instance.CurrentWave
                 : 1;
 
-            // 1. Filter available ItemSOs based on current stage environment
+            OrderData newOrder = ScriptableObject.CreateInstance<OrderData>();
+            newOrder.orderId = Guid.NewGuid().ToString();
+            newOrder.orderTitle = $"Order (Wave {currentWave})";
+
             ItemStageType targetType = isZombieStage ? ItemStageType.Zombie : ItemStageType.Human;
             List<ItemSO> validSOs = availableItemSOs.FindAll(x => x != null && x.stageType == targetType);
+            if (validSOs.Count == 0) validSOs = new List<ItemSO>(availableItemSOs);
 
             if (validSOs.Count == 0)
             {
-                Debug.LogWarning($"[OrderGenerator] No ItemSO found for stage environment: {targetType}");
+                Debug.LogWarning("[OrderGenerator] No ItemSO found in available pool.");
                 return null;
             }
 
-            // 2. Calculate distinct item count and maximum quantity based on difficulty scaling
-            int maxDistinct = isZombieStage ? maxDistinctItemsStage2 : maxDistinctItemsStage1;
-            int distinctCount = Mathf.Clamp(1 + (currentWave / 2), 1, Mathf.Min(maxDistinct, validSOs.Count));
-            int maxQuantity = Mathf.Clamp(1 + (currentWave / 3), 1, 3);
-
-            // 3. Create dynamic OrderData instance in memory
-            OrderData newOrder = ScriptableObject.CreateInstance<OrderData>();
-            newOrder.orderId = Guid.NewGuid().ToString();
-            newOrder.orderTitle = isZombieStage ? $"Zombie Order (Wave {currentWave})" : $"Order (Wave {currentWave})";
-
-            // Shuffle pool to guarantee random item combinations
-            List<ItemSO> shuffledList = new List<ItemSO>(validSOs);
-            Shuffle(shuffledList);
-
+            // Customer requests 2 to 4 items
+            int itemCount = UnityEngine.Random.Range(2, 5);
             int totalReward = 0;
 
-            for (int i = 0; i < distinctCount; i++)
+            for (int i = 0; i < itemCount; i++)
             {
-                ItemSO selectedSO = shuffledList[i];
-                int qty = UnityEngine.Random.Range(1, maxQuantity + 1);
-
+                ItemSO selectedSO = validSOs[UnityEngine.Random.Range(0, validSOs.Count)];
                 newOrder.items.Add(new OrderItem
                 {
                     itemData = selectedSO,
-                    quantity = qty
+                    quantity = 1
                 });
 
-                totalReward += selectedSO.basePrice * qty;
+                totalReward += (selectedSO != null ? selectedSO.basePrice : 10);
             }
 
             newOrder.rewardAmount = totalReward;
 
-            // 4. Retrieve allowed delivery time from difficulty system
             float allowedTime = DifficultyScalingSystem.Instance != null
                 ? DifficultyScalingSystem.Instance.CurrentAllowedDeliveryTime
-                : 10f;
+                : 15f;
 
-            Debug.Log($"[OrderGenerator] Dynamic Order Generated: {newOrder.orderTitle} | Items: {newOrder.items.Count} | Reward: {totalReward} | Time: {allowedTime}s");
+            Debug.Log($"[OrderGenerator] Multi-Item Order Generated ({itemCount} items) | Reward: {totalReward} | Time: {allowedTime}s");
 
-            // Notify observer systems
             OnOrderGenerated?.Invoke(newOrder, allowedTime);
 
             return newOrder;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -25,6 +25,9 @@ namespace ZombieDiner.Orders
         [Header("Basic Order Info")]
         public string orderId;
         public string orderTitle;
+
+        [Header("Dish Order")]
+        public DishSO requestedDish;
 
         [Header("Order Contents")]
         public List<OrderItem> items = new List<OrderItem>();

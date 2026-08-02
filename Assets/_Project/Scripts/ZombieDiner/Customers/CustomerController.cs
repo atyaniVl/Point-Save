@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using ZombieDiner.Orders;
 using ZombieDiner.UI;
@@ -60,6 +60,10 @@ namespace ZombieDiner.Customers
         private Sequence walkSequence;
         private HashSet<string> deliveredItemIDs = new HashSet<string>();
 
+        private DeliveryZone deliveryZone;
+        private CustomerOrderReceiver orderReceiver;
+        private BoxCollider2D clickCollider;
+
         public OrderData CurrentOrder => currentOrder;
         public CustomerState CurrentState => currentState;
 
@@ -68,13 +72,30 @@ namespace ZombieDiner.Customers
             if (customerSpriteRenderer == null) customerSpriteRenderer = GetComponentInChildren<SpriteRenderer>();
             if (bubbleUI == null) bubbleUI = GetComponentInChildren<CustomerOrderBubbleUI>();
             if (bubbleUI != null) bubbleUI.HideBubbleImmediate();
+
+            if (!TryGetComponent(out orderReceiver)) orderReceiver = gameObject.AddComponent<CustomerOrderReceiver>();
+            if (!TryGetComponent(out deliveryZone)) deliveryZone = gameObject.AddComponent<DeliveryZone>();
+
+            if (!TryGetComponent(out clickCollider))
+            {
+                clickCollider = gameObject.AddComponent<BoxCollider2D>();
+                clickCollider.size = new Vector2(1.1f, 1.6f);
+                clickCollider.offset = Vector2.zero;
+            }
         }
 
         public void InitializeInQueue(Vector3 targetPos, OrderData order, float defaultPatienceTime)
         {
             targetQueuePosition = targetPos;
             currentOrder = order;
+
+            if(TryGetComponent<DeliveryZone>(out var deliveryZone))
+            {
+                //deliveryZone.;
+            }
+
             deliveredItemIDs.Clear();
+            fulfilledCounts.Clear();
             hasPlayedWarningSound = false;
 
             bool isZombie = IsZombieStage();
@@ -90,6 +111,61 @@ namespace ZombieDiner.Customers
             transform.DOMove(targetQueuePosition, Mathf.Max(0.5f, duration))
                 .SetEase(Ease.Linear)
                 .OnComplete(OnReachedDestination);
+        }
+
+        private readonly Dictionary<string, int> fulfilledCounts = new Dictionary<string, int>();
+
+        public bool TryFulfillItem(ItemSO item)
+        {
+            if (currentOrder == null || currentOrder.items == null || item == null) return false;
+
+            foreach (var orderItem in currentOrder.items)
+            {
+                if (orderItem?.itemData == null) continue;
+                ItemSO reqSO = orderItem.itemData;
+
+                bool isMatch = item == reqSO ||
+                               string.Equals(item.name, reqSO.name, System.StringComparison.OrdinalIgnoreCase) ||
+                               (!string.IsNullOrEmpty(item.itemId) && string.Equals(item.itemId, reqSO.itemId, System.StringComparison.OrdinalIgnoreCase)) ||
+                               (!string.IsNullOrEmpty(item.itemName) && string.Equals(item.itemName, reqSO.itemName, System.StringComparison.OrdinalIgnoreCase));
+
+                if (isMatch)
+                {
+                    string reqKey = reqSO.name;
+                    int currentFulfilled = fulfilledCounts.ContainsKey(reqKey) ? fulfilledCounts[reqKey] : 0;
+                    if (currentFulfilled < orderItem.quantity)
+                    {
+                        fulfilledCounts[reqKey] = currentFulfilled + 1;
+                        if (bubbleUI != null)
+                        {
+                            bubbleUI.UpdateFulfilledProgress(fulfilledCounts, currentOrder);
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public bool IsOrderFullyFulfilled()
+        {
+            if (currentOrder == null || currentOrder.items == null || currentOrder.items.Count == 0) return true;
+
+            foreach (var orderItem in currentOrder.items)
+            {
+                if (orderItem?.itemData == null) continue;
+                ItemSO reqSO = orderItem.itemData;
+                string reqKey = reqSO.name;
+                int currentFulfilled = fulfilledCounts.ContainsKey(reqKey) ? fulfilledCounts[reqKey] : 0;
+
+                if (currentFulfilled < orderItem.quantity)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public void MoveToQueuePosition(Vector3 newPos)
@@ -121,9 +197,19 @@ namespace ZombieDiner.Customers
 
         private void Update()
         {
+            UpdateSortingOrder();
+
             if (currentState == CustomerState.WaitingForOrder)
             {
                 HandlePatience();
+            }
+        }
+
+        private void UpdateSortingOrder()
+        {
+            if (customerSpriteRenderer != null)
+            {
+                customerSpriteRenderer.sortingOrder = Mathf.RoundToInt(-transform.position.y * 100);
             }
         }
 

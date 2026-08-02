@@ -1,0 +1,1 @@
+using UnityEngine; [CreateAssetMenu(menuName="ZombieDiner/Dish")] public class DishSO:ScriptableObject{public string dishName; public Sprite sprite;}

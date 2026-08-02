@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -55,6 +55,25 @@ namespace ZombieDiner.UI
                 Destroy(child.gameObject);
             }
 
+            if (orderData.requestedDish != null && itemSlotPrefab != null && itemsContainer != null)
+            {
+                GameObject slotGO = Instantiate(itemSlotPrefab, itemsContainer);
+                slotGO.transform.localScale = Vector3.zero;
+
+                Image itemImage = slotGO.transform.Find("ItemIcon")?.GetComponent<Image>();
+                TextMeshProUGUI quantityText = slotGO.transform.Find("QuantityText")?.GetComponent<TextMeshProUGUI>();
+
+                if (itemImage == null) itemImage = slotGO.GetComponentInChildren<Image>();
+                if (quantityText == null) quantityText = slotGO.GetComponentInChildren<TextMeshProUGUI>();
+
+                if (itemImage != null && orderData.requestedDish.sprite != null) itemImage.sprite = orderData.requestedDish.sprite;
+                if (quantityText != null) quantityText.text = orderData.requestedDish.dishName;
+
+                activeSlotMap[orderData.requestedDish.dishName] = slotGO;
+                slotGO.transform.DOScale(Vector3.one, 0.25f).SetEase(Ease.OutBack);
+                return;
+            }
+
             int itemIndex = 0;
             foreach (var item in orderData.items)
             {
@@ -72,13 +91,48 @@ namespace ZombieDiner.UI
                 if (itemImage != null) itemImage.sprite = item.itemData.itemIcon;
                 if (quantityText != null) quantityText.text = $"x{item.quantity}";
 
-                // 🔹 حفظ مرجع الـ Slot ربطاً بالـ ItemID لتسليمه جزئياً
                 activeSlotMap[item.itemData.itemID] = slotGO;
 
                 float delay = itemIndex * itemStaggerDelay;
                 slotGO.transform.DOScale(Vector3.one, 0.25f).SetDelay(delay).SetEase(Ease.OutBack);
 
                 itemIndex++;
+            }
+        }
+
+        public void UpdateFulfilledProgress(Dictionary<string, int> fulfilledCounts, OrderData orderData)
+        {
+            if (orderData == null || fulfilledCounts == null) return;
+
+            foreach (var item in orderData.items)
+            {
+                if (item == null || item.itemData == null) continue;
+                string key = string.IsNullOrEmpty(item.itemData.itemID) ? item.itemData.name : item.itemData.itemID;
+                int fulfilled = fulfilledCounts.ContainsKey(key) ? fulfilledCounts[key] : 0;
+
+                if (activeSlotMap.TryGetValue(key, out GameObject slotGO))
+                {
+                    TextMeshProUGUI quantityText = slotGO.transform.Find("QuantityText")?.GetComponent<TextMeshProUGUI>();
+                    if (quantityText == null) quantityText = slotGO.GetComponentInChildren<TextMeshProUGUI>();
+
+                    int remaining = item.quantity - fulfilled;
+                    if (remaining <= 0)
+                    {
+                        if (quantityText != null) quantityText.gameObject.SetActive(false);
+                        Transform checkmarkTransform = slotGO.transform.Find("Checkmark");
+                        if (checkmarkTransform != null)
+                        {
+                            checkmarkTransform.gameObject.SetActive(true);
+                            checkmarkTransform.localScale = Vector3.zero;
+                            checkmarkTransform.DOScale(Vector3.one, 0.35f).SetEase(Ease.OutBack);
+                        }
+                    }
+                    else
+                    {
+                        if (quantityText != null) quantityText.text = $"x{remaining}";
+                        slotGO.transform.DOPunchScale(Vector3.one * 0.15f, 0.2f);
+                    }
+                }
             }
         }
 

@@ -11,6 +11,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/Scenes/Additive Scenes/Settings.unity
     guid: c32d8b32eda378a4a86a75a54cab1b2f
+  - enabled: 1
+    path: Assets/_Project/Scenes/Additive Scenes/PauseMenu.unity
+    guid: 3e45fa075a3a13c4cbf72ab48d9b2191
+  - enabled: 1
+    path: Assets/_Project/Scenes/Single Scenes/Core Game.unity
+    guid: cc7a0f4e728569647ad021a1b252a76c
+  - enabled: 1
+    path: Assets/_Project/Scenes/Single Scenes/Core Game Atyani Test.unity
+    guid: 2a60d2aac8863cc43a8812fea0258f7a
+  - enabled: 1
+    path: Assets/_Project/Scenes/Single Scenes/Core Game Stage 2.unity
+    guid: c32d8b32eda378a4a86a75a54cab1b99
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0
