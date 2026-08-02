@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
 using ZombieDiner.Core;
@@ -23,23 +23,48 @@ namespace ZombieDiner.Customers
         [SerializeField] private Transform queueStartPoint;
 
         [Tooltip("المسافة الفاصلة بين كل زبون والذي يليه في الصف")]
-        [SerializeField] private float queueSpacing = 1.5f;
+        [SerializeField] private float queueSpacing = 1.3f;
 
         [Tooltip("اتجاه امتداد الطابور (مثال: Vector2.right أو Vector2.left)")]
         [SerializeField] private Vector2 queueDirection = Vector2.right;
 
         [Tooltip("الحد الأقصى لعدد الزباين في الطابور بنفس الوقت")]
-        [SerializeField] private int maxQueueCapacity = 5;
+        [SerializeField] private int maxQueueCapacity = 8;
 
-        // قائمة تتبع الزباين في الصف حالياً حسب الترتيب
-        private List<CustomerController> activeQueue = new List<CustomerController>();
+        [Header("Queue Depth Layers")]
+        [Tooltip("عدد طبقات الـ Y لإعطاء منظور العمق للموقف (مثال: 3 طبقات)")]
+        [SerializeField] private int yLayersCount = 3;
 
+        [Tooltip("المسافة العمودية بين كل طبقة والتي تليها خلفها")]
+        [SerializeField] private float yLayerOffset = 0.45f;
+
+        private CustomerController[] activeSlots;
         private float spawnTimer;
 
         private void Awake()
         {
             if (Instance == null) Instance = this;
             else Destroy(gameObject);
+
+            InitializeSlots();
+        }
+
+        private void InitializeSlots()
+        {
+            if (activeSlots == null || activeSlots.Length != maxQueueCapacity)
+            {
+                activeSlots = new CustomerController[maxQueueCapacity];
+            }
+        }
+
+        public int GetFirstFreeSlotIndex()
+        {
+            InitializeSlots();
+            for (int i = 0; i < activeSlots.Length; i++)
+            {
+                if (activeSlots[i] == null) return i;
+            }
+            return -1;
         }
 
         private void Update()
@@ -73,18 +98,19 @@ namespace ZombieDiner.Customers
         }
 
         /// <summary>
-        /// توليد زبون جديد وإضافته إلى نهاية الطابور إذا كان هناك متسع.
+        /// توليد زبون جديد وإسناد موقع ثابت له دون إزاحة الزباين الحاليين
         /// </summary>
         public void TrySpawnCustomer()
         {
-            if (activeQueue.Count >= maxQueueCapacity)
+            int freeSlotIndex = GetFirstFreeSlotIndex();
+            if (freeSlotIndex == -1)
             {
                 // الطابور ممتلئ، انتظار الدورة القادمة
                 return;
             }
 
-            // 1. حساب موضع الوقوف المستهدف في الطابور بناءً على ترتيب الزبون (Index)
-            Vector3 targetQueuePos = GetQueuePosition(activeQueue.Count);
+            // 1. حساب موضع الوقوف المستهدف للزبون بناءً على الـ Slot الشاغر
+            Vector3 targetQueuePos = GetQueuePosition(freeSlotIndex);
             Vector3 spawnPos = spawnPoint != null ? spawnPoint.position : targetQueuePos;
 
             GameObject newCustomerGO = Instantiate(customerPrefab, spawnPos, Quaternion.identity);
@@ -92,8 +118,8 @@ namespace ZombieDiner.Customers
 
             if (customer != null)
             {
-                // إضافة الزبون للقائمة فوراً لحجز موقعه في الصف
-                activeQueue.Add(customer);
+                // حجز الـ Slot للزبون
+                activeSlots[freeSlotIndex] = customer;
 
                 // إبلاغ الـ WaveManager بزيادة العداد
                 if (WaveManager.Instance != null)
@@ -110,44 +136,38 @@ namespace ZombieDiner.Customers
                     ? DifficultyScalingSystem.Instance.CurrentAllowedDeliveryTime
                     : 15f;
 
-                // تهيئة الزبون والبدء بالتحرك لنقطته في الطابور
+                // تهيئة الزبون والبدء بالتحرك لنقطته الثابتة
                 customer.InitializeInQueue(targetQueuePos, generatedOrder, patienceTime);
             }
         }
 
         /// <summary>
-        /// 🔹 حساب الموقع المطلوب في الصف بناءً على الـ Index والـ Spacing
+        /// 🔹 حساب الموقع المطلوب بناءً على الـ Index والـ Spacing وطبقات العمق الـ 3
         /// </summary>
         public Vector3 GetQueuePosition(int index)
         {
             Vector3 startPos = queueStartPoint != null ? queueStartPoint.position : transform.position;
-            Vector3 offset = (Vector3)(queueDirection.normalized * (index * queueSpacing));
-            return startPos + offset;
+            Vector3 horizontalOffset = (Vector3)(queueDirection.normalized * (index * queueSpacing));
+
+            int yLayer = index % Mathf.Max(1, yLayersCount);
+            float yOffset = yLayer * yLayerOffset;
+            float zOffset = yLayer * 0.15f;
+
+            return startPos + horizontalOffset + new Vector3(0f, yOffset, zOffset);
         }
 
         /// <summary>
-        /// 🔹 يُستدعى بواسطة CustomerController عند مغادرة الزبون لتحريك بقية الصف للأمام
+        /// 🔹 تحرير موقع الزبون المغادر دون إزاحة باقي الزباين من أماكنهم
         /// </summary>
         public void OnCustomerLeftQueue(CustomerController customer)
         {
-            if (activeQueue.Contains(customer))
+            InitializeSlots();
+            for (int i = 0; i < activeSlots.Length; i++)
             {
-                activeQueue.Remove(customer);
-                ShiftQueueForward();
-            }
-        }
-
-        /// <summary>
-        /// 🔹 إزاحة باقي الزباين في الطابور للأمام بنعومة (Smooth Queue Shift)
-        /// </summary>
-        private void ShiftQueueForward()
-        {
-            for (int i = 0; i < activeQueue.Count; i++)
-            {
-                if (activeQueue[i] != null)
+                if (activeSlots[i] == customer)
                 {
-                    Vector3 newPosition = GetQueuePosition(i);
-                    activeQueue[i].MoveToQueuePosition(newPosition);
+                    activeSlots[i] = null;
+                    break;
                 }
             }
         }
