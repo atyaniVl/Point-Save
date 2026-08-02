@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4ea2c8da97c82e4b22a3c92ab2669dc, type: 3}
+  m_Name: FlockConfig
+  m_EditorClassIdentifier: 
+  apiUrl: https://api-flock.qwacks.com
+  apiKey: flock_64a43a4b16235fea5d258d1852b635ed6c40cfc31ee229f19419dcff2f1de846
+  gameId: Zombie Dinner
+  gameVersion: 1.0.0
+  gameVersionId: 01KZ1Y3Z1N7S9BXRV4H55E06NP
+  generatedCodePath: Assets/Flock/Generated
+  enableDebugLogs: 0
+  analyticsEnabled: 1
+  analyticsAutoStartSession: 1
+  analyticsAutoEndOnQuit: 1
+  analyticsSessionTimeout: 30
+  analyticsHeartbeatInterval: 60
+  analyticsBounceThreshold: 10
+  analyticsPersistSession: 1
+  analyticsTrackFps: 1
+  analyticsFpsSampleInterval: 1
+  analyticsRequireExplicitConsent: 0
+  analyticsCacheFailedEvents: 1
+  analyticsMaxCachedEvents: 1000
+  analyticsCacheFlushBatchSize: 50
+  analyticsEventBufferFlushInterval: 10
+  enableAssetCache: 1
+  assetCacheDirectory: 
+  assetCacheMaxSizeMB: 100
+  assetDownloadTimeoutSeconds: 0
+  assetDownloadRetryCount: 3
+  enableOfflineCache: 1
+  offlineCacheDirectory: 
+  retryMaxRetries: 3
+  retryUseJitter: 1
+  httpTimeoutSeconds: 30
+  autoInitializeOnLoad: 1
+  playModeGuardEnabled: 1
+  failBuildIfVersionUnresolved: 1

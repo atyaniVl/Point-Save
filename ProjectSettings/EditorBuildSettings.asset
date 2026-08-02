@@ -23,6 +23,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/Scenes/Single Scenes/Core Game Stage 2.unity
     guid: c32d8b32eda378a4a86a75a54cab1b99
+  - enabled: 1
+    path: Assets/_Project/Scenes/Additive Scenes/Result Screen.unity
+    guid: 813628a565cb84640b3f225e4ea877f0
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0
