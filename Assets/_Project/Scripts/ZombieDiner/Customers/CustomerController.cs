@@ -327,7 +327,7 @@ namespace ZombieDiner.Customers
                 if (bubbleUI != null) bubbleUI.StopWarningShake();
             }
 
-            if (deliveredItemIDs.Count >= currentOrder.items.Count)
+            if (IsOrderFullyFulfilled())
             {
                 CompleteOrderSuccessfully();
             }
@@ -339,6 +339,9 @@ namespace ZombieDiner.Customers
         {
             bool isZombie = IsZombieStage();
             float timeRatio = remainingPatience / maxPatience;
+
+            int reward = currentOrder != null ? currentOrder.rewardAmount : 10;
+            SessionStats.AddServedPerson(reward);
 
             if (timeRatio >= 0.70f)
             {

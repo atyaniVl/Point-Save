@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using ZombieDiner.Core;
 
@@ -31,6 +31,10 @@ namespace ZombieDiner.Gameplay
         private void Start()
         {
             ResetLives();
+            if (GameManager.Instance != null)
+            {
+                SessionStats.WaveReached = GameManager.Instance.CurrentStage == GameStage.Stage2_Zombie ? "Stage 2 - Zombie Diner" : "Stage 1 - Normal Diner";
+            }
         }
 
         public void ResetLives()
@@ -88,8 +92,12 @@ namespace ZombieDiner.Gameplay
 
             if (currentLives <= 0)
             {
-                Debug.LogError("<color=red>[Game Over] All lives lost!</color>");
+                Debug.LogError("<color=red>[Game Over] All 3 lives lost!</color>");
+                int waveVal = (GameManager.Instance != null && GameManager.Instance.CurrentStage == GameStage.Stage2_Zombie) ? 2 : 1;
+                _ = QwacksLeaderboardManager.SubmitWaveScoreAsync(waveVal);
                 GameManager.Instance.ChangeStage(GameStage.GameOver);
+                GenericSceneManagement.SceneLoader.LoadAdditive("ResultScreen");
+                Time.timeScale = 0f;
             }
         }
     }

@@ -34,6 +34,7 @@ namespace ZombieDiner.Orders
 
         [Header("Currency / Reward")]
         public int rewardAmount = 10;
+        public int totalReward => rewardAmount;
 
         /// <summary>
         /// Calculates and returns the total sum of all individual items required in this order.
